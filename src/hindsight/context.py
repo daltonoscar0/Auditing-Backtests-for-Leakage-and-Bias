@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
+from typing import Any
 
 from . import astutils as A
 
@@ -91,10 +92,35 @@ class FileContext:
     source: str
     tree: ast.Module
     lines: list[str] = field(default_factory=list)
+    external_vocabulary: set[str] = field(default_factory=set)
+    origins: list[Any] | None = None
+    """Per-line origin map for a notebook: synthetic line -> (cell, line).
+    None for ordinary ``.py`` files, where the two coincide."""
+    """Names reachable through this file's imports, populated by
+    ``hindsight.project.link``. Empty when a file is analysed on its own."""
 
     def __post_init__(self) -> None:
         if not self.lines:
             self.lines = self.source.splitlines()
+
+    @property
+    def is_notebook(self) -> bool:
+        return self.origins is not None
+
+    def location_for(self, start: int, end: int) -> tuple[int, int, int | None]:
+        """Translate a synthetic line span into what a reader should be given.
+
+        For a ``.py`` file that is the span unchanged. For a notebook it is the
+        line within the cell, plus the cell number, because a synthetic line
+        number into a concatenation of cells is not a coordinate anyone can use.
+        """
+        if self.origins is None:
+            return start, end, None
+        if not 1 <= start <= len(self.origins):
+            return start, end, None
+        origin = self.origins[start - 1]
+        span = end - start
+        return origin.line, origin.line + span, origin.cell
 
     # ------------------------------------------------------------------ text
     def line_text(self, lineno: int) -> str:
@@ -167,8 +193,9 @@ class FileContext:
 
     @cached_property
     def vocabulary(self) -> set[str]:
-        """Every identifier, attribute, keyword and string literal in the file."""
-        return self.all_names | self.all_strings | self.all_keywords
+        """Every identifier, attribute, keyword and string literal in the file,
+        plus anything reachable through its imports."""
+        return self.all_names | self.all_strings | self.all_keywords | self.external_vocabulary
 
     def matches(self, pattern: re.Pattern[str]) -> bool:
         return any(pattern.search(token) for token in self.vocabulary)
@@ -185,7 +212,10 @@ class FileContext:
         tokens |= {kw.arg for call in A.walk_calls(scope) for kw in call.keywords if kw.arg}
         if scope is not self.tree:
             tokens |= self.module_level_vocabulary
-        return tokens
+        # Whatever this file imports is in scope too: a cost model defined in
+        # costs.py and applied here is a cost model, and reading only this file
+        # is what made the tool accuse correct code of forgetting costs.
+        return tokens | self.external_vocabulary
 
     @cached_property
     def module_level_vocabulary(self) -> set[str]:

@@ -12,6 +12,7 @@ from .llm.provider import Provider, Usage
 from .llm.reasoning import DEFAULT_WORKERS, LLMPass
 from .merge import merge
 from .models import AuditResult, Category, Finding
+from .project import link
 
 
 def audit(
@@ -40,6 +41,9 @@ def audit(
             raise ValueError(f"unknown check id(s): {', '.join(sorted(unknown))}")
 
     contexts, errors = collect(root)
+    # Resolve imports before any check runs, so every file's notion of what is
+    # in scope includes what it pulls in from elsewhere in the repository.
+    link(contexts)
 
     static: list[Finding] = []
     for ctx in contexts:
