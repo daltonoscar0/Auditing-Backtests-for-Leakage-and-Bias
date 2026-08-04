@@ -1,0 +1,25 @@
+{
+  "taxonomy_version": "1.0.0",
+  "fixture": "mixed",
+  "description": "A perpetual-futures research repo carrying at least one defect from every category in the taxonomy.",
+  "expected": [
+    {"check_id": "CF001", "category": "COST-FANTASY", "file": "backtest.py", "line": 17,
+     "note": "PnL never subtracts the fee that config.py defines but nothing imports."},
+    {"check_id": "CF003", "category": "COST-FANTASY", "file": "config.py", "line": 5,
+     "note": "FEE_BPS is a placeholder zero."},
+    {"check_id": "SV001", "category": "SURVIVORSHIP", "file": "data.py", "line": 12,
+     "note": "The universe is the venue's current listings, applied across the whole history."},
+    {"check_id": "LA001", "category": "LOOKAHEAD", "file": "features.py", "line": 14,
+     "note": "funding_next attaches the next hour's funding rate to this hour's bar."},
+    {"check_id": "LL001", "category": "LABEL-LEAK", "file": "model.py", "line": 12,
+     "note": "The FEATURES list contains the target column itself."},
+    {"check_id": "LA004", "category": "LOOKAHEAD", "file": "model.py", "line": 22,
+     "note": "The scaler is fitted before the split, so it has seen the test period."},
+    {"check_id": "CV002", "category": "UNPURGED-CV", "file": "model.py", "line": 23,
+     "note": "train_test_split shuffles hourly bars with a four-hour forward label."},
+    {"check_id": "SO001", "category": "SWEEP-OVERFIT", "file": "research.py", "line": 21,
+     "note": "Thirty threshold/holding-period combinations, scored on `test`, maximum returned."},
+    {"check_id": "SO004", "category": "SWEEP-OVERFIT", "file": "research.py", "line": 21,
+     "note": "Thirty trials with no correction for the number of them."}
+  ]
+}
