@@ -417,9 +417,34 @@ bug in the fixture that its author did not intend.
 They are left as `UNEXPECTED` in the eval output and the fixture's
 `expected_findings.json` is unchanged. Adding them to the answer key after the
 fact would make the fixture's expectations derived from the model's output,
-which destroys the only thing an independent answer key is for. The `ffill` bug
-is also left in place: fixing it would invalidate a recorded finding and drift
-the cassette.
+which destroys the only thing an independent answer key is for.
+
+The `ffill` bug is the exception, because it is a defect rather than an
+undocumented instance of a planted one: it was an accidental correctness error,
+not one of the six semantic traps the fixture exists to hold. It has been fixed,
+which shifted every line below it and invalidated the pipeline.py half of the
+cassette, so those five prompts were re-recorded from scratch. The study.py
+entries are from the original run, that file being untouched. The re-recorded run
+scored the same 4/6 with the same two anchors, and no longer reports the `ffill`.
+
+The remaining unplanted findings on `pipeline.py` are not bugs to fix. The
+realised-vol window and the algebraic reconstruction of the target are both
+instances of the planted `LL004` - features and label drawn from the same bar -
+manifesting at sites the fixture author did not enumerate. The fixture is
+working; the note in its answer key was narrower than the defect it describes.
+
+### 49. The eval matched expectations category-first, and mis-scored
+
+`Expectation.matches` keys on category, which is right for the reason given in
+decision 9. But when two findings of one category land on one statement, the
+first one encountered satisfied the expectation and the genuinely-expected
+finding fell through to `UNEXPECTED`. A `CF002` consumed the `CF005`
+expectation, and the real `CF005` was reported as unexpected on the line
+directly above.
+
+Matching now prefers a finding whose check id equals the expectation's, and only
+falls back to category when none does. Found by reading the eval's own
+`CHECK-ID` diagnostic output on the recorded run.
 
 ### 48. A Layer 2 shortfall reports rather than fails
 

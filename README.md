@@ -216,16 +216,15 @@ Layer 2 — model pass (replayed from cassette)
   the fake-client tests. Re-record through the API with: make record
 
 llm_only:
-  ANCHOR     LABEL-LEAK     pipeline.py:47 expected, LL004 reported at pipeline.py:54 instead
+  ANCHOR     LABEL-LEAK     pipeline.py:50 expected, LL004 reported at pipeline.py:56 instead
   ANCHOR     SWEEP-OVERFIT  study.py:13 expected, SO005 reported at study.py:28-32 instead
-  UNEXPECTED LABEL-LEAK     pipeline.py:54  (LL004) Same-bar close return makes the intraday label algebraically recoverable
+  UNEXPECTED LOOKAHEAD      pipeline.py:57  (LA006) close_to_close feature contains the same bar's close, which is the label's terminal price
+  UNEXPECTED LABEL-LEAK     pipeline.py:57  (LL001) Target is algebraically recoverable from close_to_close and overnight_gap
   UNEXPECTED SURVIVORSHIP   study.py:19  (SV003) Round 5 universe excludes the two worst-performing sectors, a whole-sample outcome
-  UNEXPECTED LOOKAHEAD      pipeline.py:37  (LA006) Frame-wide ffill leaks one ticker's later fundamentals into another ticker's earlier rows
-  UNEXPECTED LOOKAHEAD      pipeline.py:54  (LA006) close_to_close feature contains the same session's close, which is the label
-  UNEXPECTED LOOKAHEAD      pipeline.py:42  (LA006) Sector reference joined on ticker alone carries today's classification back over all history
-  UNEXPECTED COST-FANTASY   pipeline.py:66-67  (CF005) Order sizing scales with capital and never checks against traded volume
+  UNEXPECTED LABEL-LEAK     pipeline.py:56  (LL004) realised_vol window terminates on the same bar the label is drawn from
+  UNEXPECTED COST-FANTASY   pipeline.py:70  (CF002) Orders priced at the unadjusted closing print for a strategy whose label is a daily open-to-close round trip
+  UNEXPECTED LOOKAHEAD      pipeline.py:45  (LA006) Sector reference table has no effective date, so today's classification is applied to all history
   UNEXPECTED SWEEP-OVERFIT  study.py:28-32  (SO005) Headline Sharpe is the fifth revision scored on the same holdout used to choose all five
-  CHECK-ID   pipeline.py:67 expected CF005, got CF002
 
 Overall static recall  100.0%  (37/37)
 False positives on clean/  0
@@ -303,14 +302,20 @@ answer key. The result:
   holdout-reuse on the docstring claiming the headline rather than the round
   table. The eval reports these as `ANCHOR`, and they still count as misses,
   because where a finding points is part of what makes it actionable.
-- **Seven findings nobody planted**, most of them real: a rolling window whose
-  right edge includes the label bar, an exact algebraic reconstruction of the
-  target from two features, and a frame-wide `ffill` that leaks one ticker's
+- **Findings nobody planted**, most of them real: a rolling window whose right
+  edge includes the label bar, an exact algebraic reconstruction of the target
+  from two features, and a frame-wide `ffill` that leaked one ticker's
   fundamentals into another's history — that last one a genuine bug in the
-  fixture its author did not intend.
-- **One bug in Hindsight**, found by the exercise: the merge layer was collapsing
-  two model findings that shared a category and sat close together, silently
-  dropping a planted `CF005` because a `CF002` landed on the same statement.
+  fixture its author did not intend. It has since been fixed and the affected
+  prompts re-recorded; the rest are left as `UNEXPECTED`, because editing the
+  answer key to match the model would destroy the only thing an independent
+  answer key is for.
+- **Two bugs in Hindsight**, found by the exercise. The merge layer was
+  collapsing two model findings that shared a category and sat close together,
+  silently dropping a planted `CF005` because a `CF002` landed on the same
+  statement. And the eval matched expectations category-first, so when two
+  findings of one category shared a line it consumed the wrong one and reported
+  the right one as unexpected. Both fixed, both with regression tests.
 
 The recording is marked `subagent`, not `live`: it evidences that the model finds
 these defects, not that `AnthropicProvider` speaks the wire format. That last
