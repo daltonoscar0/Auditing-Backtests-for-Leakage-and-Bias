@@ -453,3 +453,57 @@ something and the build should break. Against a model-generated one it is a
 measurement of the model, and a build that fails when a model changes its mind
 is a build nobody can keep green. The eval gates on the static layer and the
 clean fixture, and reports Layer 2.
+
+---
+
+## Cross-file, notebooks and adoption (Milestone 3)
+
+### 50. Imports are resolved one level deep, not transitively
+
+`ProjectIndex` maps every module in the audited tree to what it defines, then
+works out which of those definitions each file imports. That vocabulary joins the
+file's own when a check asks whether there is a cost term in scope. The
+`cross_file` fixture is the proof: read one file at a time it raises `CF001`,
+`CF002` and `CF004`; with imports resolved it is silent, and a test asserts both
+halves of that.
+
+One level, deliberately. Transitive resolution would let a single mention of the
+word `fee` anywhere in a repository suppress every cost finding in it, trading a
+false-positive problem for a worse and much less visible false-negative one.
+
+An import of a name that cannot be resolved still contributes the bound name:
+`from vendor.costs import COST_BPS` tells a reader there is a cost model whether
+or not `vendor/` is inside the audited tree.
+
+### 51. Notebook cells are analysed together and cited separately
+
+Concatenating cells into one synthetic module is what makes cross-cell analysis
+work, and cross-cell is the normal case — a target defined in cell 2 and used in
+cell 7. Treating each cell as its own file would miss all of it.
+
+But a line number into that concatenation is not a coordinate anyone can act on,
+so `Location` carries a cell and every citation reads `cell 4, line 2`. Cells
+that are not Python — IPython magics, shell escapes, half-written drafts — are
+blanked rather than dropped, which keeps every later cell's numbering honest.
+
+No unified diff is offered for a notebook: the lines on disk are JSON string
+fragments, so a patch against the flattened source would not apply to anything.
+
+### 52. Baselines fingerprint the code, not the line
+
+A line-numbered suppression file goes stale the first time somebody adds an
+import, and a stale one is worse than none: it stops suppressing the finding it
+named and starts suppressing whatever moved into that line. Entries are keyed on
+a hash of check id, path, cell and the normalised text of the cited code, and a
+test asserts a baseline survives an edit above the finding it covers.
+
+### 53. Hindsight audits itself in CI, and that found a false positive
+
+`SV001` fired on `checks/survivorship.py`, because the regex that looks for
+present-day universe names contains the string `current_constituents`, and the
+constant holding it is called `CURRENT_UNIVERSE`. Both the pattern and the name
+bound to it are now skipped when the assignment is a compiled regex.
+
+This generalises: any repository that holds a vocabulary of bad names — a linter,
+a data dictionary, a validation schema — would have hit the same thing. The
+self-audit step in CI exists to keep catching this class of problem.

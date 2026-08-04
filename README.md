@@ -57,7 +57,7 @@ Requires Python 3.11 or newer.
 ```sh
 git clone <this repo> && cd hindsight
 make install          # creates .venv and installs with dev extras
-make test             # 180 tests
+make test             # 208 tests
 make eval             # score against the planted-bug fixtures
 ```
 
@@ -91,6 +91,8 @@ hindsight checks [--format text|json]
 | `--llm-replay FILE` | Replay a recorded cassette instead of calling the API |
 | `--llm-workers N` | Parallel model requests (default 4) |
 | `--llm-all-categories` | Ask every category about every file instead of skipping irrelevant ones |
+| `--baseline FILE` | Suppress findings recorded in a baseline; report only what is new |
+| `--write-baseline FILE` | Record the current findings as the baseline |
 
 Exit codes: `0` audit ran and nothing tripped `--fail-on`; `1` findings at or
 above the threshold; `2` the audit could not run (bad path, unknown check id,
@@ -153,7 +155,12 @@ research is correct.
       ▼
   collector ──► FileContext (per file: is this temporal? which column is the
       │          target? how far forward does the label look? is there a cost
-      │          term in scope?)
+      │          term in scope?)  .py and .ipynb; notebook cells are analysed
+      │          together and cited as `cell 4, line 2`
+      │
+      ├──► project index                    ── resolves imports, so a cost model
+      │                                          defined in costs.py is in scope
+      │                                          for backtest.py
       │
       ├──► Layer 1: 23 AST checks           ── always on, stdlib only, offline
       │
@@ -174,6 +181,22 @@ a plain-English explanation of *why* this biases results, the canonical remedy,
 a confidence level, and — where the fix is mechanical — a unified diff you can
 feed to `git apply`. Hindsight never applies a patch itself.
 
+## Adopting it on an existing repo
+
+The first run on established research produces a wall of findings, and a wall of
+findings is indistinguishable from none — both get ignored. Record what is
+already there, then report only what is new:
+
+```sh
+hindsight audit . --write-baseline .hindsight-baseline.json
+hindsight audit . --baseline .hindsight-baseline.json --fail-on critical
+```
+
+Baseline entries are keyed on a fingerprint of the cited *code*, never its line
+number. A line-numbered baseline goes stale the first time someone adds an import
+at the top of a file, and then silently stops suppressing the thing it named
+while starting to suppress whatever moved into that line.
+
 ## Eval
 
 `make eval` scores the auditor against fixture repos with deliberately planted
@@ -189,9 +212,11 @@ Layer 1 — static checks
   ---------------- ------- -------- --------  -----
   clean                  0        0      n/a      0
   cost_fantasy           5        5   100.0%      0
+  cross_file             0        0      n/a      0
   label_leak             4        4   100.0%      0
   lookahead              6        6   100.0%      0
   mixed                  9        9   100.0%      0
+  notebook               3        3   100.0%      0
   survivorship           4        4   100.0%      0
   sweep_overfit          5        5   100.0%      0
   unpurged_cv            4        4   100.0%      0
@@ -199,10 +224,10 @@ Layer 1 — static checks
 Per category (planted bugs across the static fixtures)
   category         recall       hits
   -------------- --------  ---------
-  LOOKAHEAD       100.0%        8/8  ################
+  LOOKAHEAD       100.0%      10/10  ################
   LABEL-LEAK      100.0%        5/5  ################
   SURVIVORSHIP    100.0%        5/5  ################
-  UNPURGED-CV     100.0%        5/5  ################
+  UNPURGED-CV     100.0%        6/6  ################
   COST-FANTASY    100.0%        7/7  ################
   SWEEP-OVERFIT   100.0%        7/7  ################
 
@@ -226,7 +251,7 @@ llm_only:
   UNEXPECTED LOOKAHEAD      pipeline.py:45  (LA006) Sector reference table has no effective date, so today's classification is applied to all history
   UNEXPECTED SWEEP-OVERFIT  study.py:28-32  (SO005) Headline Sharpe is the fifth revision scored on the same holdout used to choose all five
 
-Overall static recall  100.0%  (37/37)
+Overall static recall  100.0%  (40/40)
 False positives on clean/  0
 Layer 2 recall         66.7%  (4/6), 2 anchored elsewhere  [subagent]
 
@@ -248,7 +273,7 @@ they fired on it, which is exactly what it is there for.
 ## Testing
 
 ```sh
-make test    # 180 tests
+make test    # 208 tests
 make lint    # ruff check + format --check
 ```
 
