@@ -13,12 +13,15 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 
 from . import checks as _checks  # noqa: F401  - registers checks for --list-checks
 from .audit import audit
 from .checks.base import registered_ids
+from .llm.cassette import LIVE, Cassette, CassetteProvider, RecordingProvider
 from .llm.provider import ProviderError, build_provider
+from .llm.reasoning import DEFAULT_WORKERS
 from .models import Severity
 from .readonly import ReadOnlyViolation
 from .report import json_report, markdown
@@ -83,6 +86,31 @@ def build_parser() -> argparse.ArgumentParser:
         default="anthropic",
         help="provider for the model pass (default: anthropic)",
     )
+    audit_parser.add_argument(
+        "--llm-record",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="record every model response to a cassette for offline replay",
+    )
+    audit_parser.add_argument(
+        "--llm-replay",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="replay a recorded cassette instead of calling the API (implies --llm)",
+    )
+    audit_parser.add_argument(
+        "--llm-workers",
+        type=int,
+        default=DEFAULT_WORKERS,
+        help=f"parallel model requests (default: {DEFAULT_WORKERS})",
+    )
+    audit_parser.add_argument(
+        "--llm-all-categories",
+        action="store_true",
+        help="ask every category about every file instead of skipping irrelevant ones",
+    )
 
     checks_parser = subparsers.add_parser("checks", help="list the available checks")
     checks_parser.add_argument(
@@ -136,19 +164,40 @@ def _list_checks(fmt: str) -> int:
 def _run_audit(args: argparse.Namespace) -> int:
     only = [part.strip().upper() for part in args.only.split(",")] if args.only else None
 
+    recorder: RecordingProvider | None = None
     provider = None
-    if args.llm and not args.no_llm:
-        try:
+    try:
+        if args.llm_replay is not None:
+            provider = CassetteProvider.from_path(args.llm_replay)
+        elif args.llm and not args.no_llm:
             provider = build_provider(args.provider)
-        except ProviderError as exc:
-            print(f"hindsight: {exc}", file=sys.stderr)
-            return EXIT_ERROR
+            if args.llm_record is not None:
+                recorder = RecordingProvider(inner=provider, cassette=Cassette(provenance=LIVE))
+                recorder.cassette.model = getattr(provider, "model", "")
+                provider = recorder
+    except (ProviderError, OSError, ValueError) as exc:
+        print(f"hindsight: {exc}", file=sys.stderr)
+        return EXIT_ERROR
 
     try:
-        result = audit(args.path, only=only, provider=provider)
+        result = audit(
+            args.path,
+            only=only,
+            provider=provider,
+            llm_workers=max(1, args.llm_workers),
+            llm_gate=not args.llm_all_categories,
+        )
     except (NotADirectoryError, FileNotFoundError, ValueError, ReadOnlyViolation) as exc:
         print(f"hindsight: {exc}", file=sys.stderr)
         return EXIT_ERROR
+
+    if recorder is not None:
+        recorder.cassette.recorded_at = datetime.now(tz=UTC).isoformat(timespec="seconds")
+        recorder.save(args.llm_record)
+        print(
+            f"recorded {len(recorder.cassette.responses)} responses to {args.llm_record}",
+            file=sys.stderr,
+        )
 
     report = markdown.render(result) if args.format == "md" else json_report.render(result) + "\n"
 
@@ -157,6 +206,16 @@ def _run_audit(args: argparse.Namespace) -> int:
         print(f"wrote {args.out}", file=sys.stderr)
     else:
         sys.stdout.write(report)
+
+    if result.llm_usage and result.llm_usage.get("requests"):
+        usage = result.llm_usage
+        print(
+            f"model pass: {usage['requests']} request(s), "
+            f"{usage['skipped_requests']} skipped as irrelevant, "
+            f"{usage['input_tokens']} in / {usage['output_tokens']} out, "
+            f"~${usage['estimated_usd']:.3f}",
+            file=sys.stderr,
+        )
 
     if args.fail_on:
         threshold = Severity(args.fail_on)

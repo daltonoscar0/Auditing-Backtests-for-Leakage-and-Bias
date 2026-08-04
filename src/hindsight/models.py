@@ -144,6 +144,8 @@ class AuditResult:
     checks_run: list[str]
     llm_enabled: bool = False
     errors: list[str] = field(default_factory=list)
+    llm_usage: dict[str, Any] | None = None
+    """Requests and tokens consumed by the model pass, when one ran."""
 
     def counts_by_severity(self) -> dict[str, int]:
         counts = {s.value: 0 for s in Severity}

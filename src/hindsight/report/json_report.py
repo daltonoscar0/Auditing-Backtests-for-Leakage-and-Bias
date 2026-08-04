@@ -21,6 +21,7 @@ def to_dict(result: AuditResult) -> dict[str, Any]:
         "files_scanned": result.files_scanned,
         "checks_run": result.checks_run,
         "llm_enabled": result.llm_enabled,
+        "llm_usage": result.llm_usage,
         "summary": {
             "total": len(result.findings),
             "by_severity": result.counts_by_severity(),

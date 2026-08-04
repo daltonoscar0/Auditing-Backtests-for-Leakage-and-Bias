@@ -8,8 +8,8 @@ from pathlib import Path
 from . import checks as _checks  # noqa: F401  - importing registers every check
 from .checks.base import registered_ids, run_all
 from .collector import collect
-from .llm.provider import Provider
-from .llm.reasoning import LLMPass
+from .llm.provider import Provider, Usage
+from .llm.reasoning import DEFAULT_WORKERS, LLMPass
 from .merge import merge
 from .models import AuditResult, Category, Finding
 
@@ -20,6 +20,8 @@ def audit(
     only: Sequence[str] | None = None,
     provider: Provider | None = None,
     llm_categories: Sequence[Category] | None = None,
+    llm_workers: int = DEFAULT_WORKERS,
+    llm_gate: bool = True,
 ) -> AuditResult:
     """Audit the repository at `root`.
 
@@ -44,14 +46,19 @@ def audit(
         static.extend(run_all(ctx, only=selected))
 
     llm_findings: list[Finding] = []
+    usage: dict | None = None
     if provider is not None:
         pass_ = LLMPass(
             provider=provider,
             categories=tuple(llm_categories) if llm_categories else tuple(Category),
+            workers=llm_workers,
+            gate=llm_gate,
         )
         llm_findings = pass_.run(contexts)
         errors.extend(pass_.errors)
         errors.extend(f"discarded model finding: {r.reason}" for r in pass_.rejected)
+        usage = getattr(provider, "usage", Usage()).to_dict()
+        usage["skipped_requests"] = len(pass_.skipped)
 
     return AuditResult(
         root=str(root),
@@ -60,4 +67,5 @@ def audit(
         checks_run=sorted(selected) if selected else registered_ids(),
         llm_enabled=provider is not None,
         errors=errors,
+        llm_usage=usage,
     )
