@@ -1,0 +1,15 @@
+{
+  "taxonomy_version": "1.0.0",
+  "fixture": "unpurged_cv",
+  "description": "Four validation schemes for a ten-bar-horizon model, each letting information cross the train/test boundary a different way.",
+  "expected": [
+    {"check_id": "CV001", "category": "UNPURGED-CV", "file": "validation.py", "line": 18,
+     "note": "KFold with shuffle=True scatters future bars into every training fold."},
+    {"check_id": "CV002", "category": "UNPURGED-CV", "file": "validation.py", "line": 27,
+     "note": "train_test_split shuffles by default, interleaving test rows with their own neighbours."},
+    {"check_id": "CV003", "category": "UNPURGED-CV", "file": "validation.py", "line": 31,
+     "note": "TimeSeriesSplit with no gap and no embargo, against a ten-bar label."},
+    {"check_id": "CV004", "category": "UNPURGED-CV", "file": "validation.py", "line": 41,
+     "note": "gap=2 against a ten-bar horizon leaves eight overlapping bars unpurged."}
+  ]
+}

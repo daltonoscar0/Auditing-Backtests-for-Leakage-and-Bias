@@ -1,0 +1,17 @@
+{
+  "taxonomy_version": "1.0.0",
+  "fixture": "sweep_overfit",
+  "description": "A 105-combination breakout sweep scored on the test set, plus a grid search whose best_score_ is reported as out-of-sample.",
+  "expected": [
+    {"check_id": "SO004", "category": "SWEEP-OVERFIT", "file": "search.py", "line": 8,
+     "note": "A 36-point parameter grid with no multiple-testing correction."},
+    {"check_id": "SO002", "category": "SWEEP-OVERFIT", "file": "search.py", "line": 18,
+     "note": "best_score_ is the maximum over the search, printed as if it measured the model."},
+    {"check_id": "SO001", "category": "SWEEP-OVERFIT", "file": "sweep.py", "line": 26,
+     "note": "Every combination is scored against `test` and the maximum is returned."},
+    {"check_id": "SO004", "category": "SWEEP-OVERFIT", "file": "sweep.py", "line": 26,
+     "note": "105 trials, no deflation."},
+    {"check_id": "SO003", "category": "SWEEP-OVERFIT", "file": "sweep.py", "line": 35,
+     "note": "The test set is passed as eval_set, so it chooses the stopping iteration."}
+  ]
+}

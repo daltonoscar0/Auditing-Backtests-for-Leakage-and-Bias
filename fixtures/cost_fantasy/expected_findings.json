@@ -1,0 +1,17 @@
+{
+  "taxonomy_version": "1.0.0",
+  "fixture": "cost_fantasy",
+  "description": "A daily momentum backtest that charges nothing, alongside a config module whose cost parameters were never populated.",
+  "expected": [
+    {"check_id": "CF004", "category": "COST-FANTASY", "file": "backtest.py", "line": 11,
+     "note": "np.sign builds a long/short book with no stock loan fee anywhere in the file."},
+    {"check_id": "CF002", "category": "COST-FANTASY", "file": "backtest.py", "line": 17,
+     "note": "Fills are marked at the close with no spread or slippage."},
+    {"check_id": "CF001", "category": "COST-FANTASY", "file": "backtest.py", "line": 23,
+     "note": "PnL is position times return with nothing subtracted."},
+    {"check_id": "CF003", "category": "COST-FANTASY", "file": "config.py", "line": 9,
+     "note": "COMMISSION_BPS is a placeholder zero."},
+    {"check_id": "CF003", "category": "COST-FANTASY", "file": "config.py", "line": 10,
+     "note": "SLIPPAGE_BPS is a placeholder zero."}
+  ]
+}
