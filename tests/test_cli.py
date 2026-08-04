@@ -113,14 +113,9 @@ def test_llm_replay_runs_offline_and_reports_usage(
 
     assert code == EXIT_OK
     assert payload["llm_enabled"] is True
-    assert payload["summary"]["total"] == 6
-    assert {f["check_id"] for f in payload["findings"]} == {
-        "LA006",
-        "LL004",
-        "SV004",
-        "CV005",
-        "CF005",
-        "SO005",
+    assert payload["summary"]["total"] == 11
+    assert {"LA006", "LL004", "SV004", "CV005", "CF005", "SO005"} <= {
+        f["check_id"] for f in payload["findings"]
     }
     assert payload["llm_usage"]["requests"] == 10
     assert payload["llm_usage"]["skipped_requests"] == 2

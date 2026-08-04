@@ -308,17 +308,29 @@ def test_the_llm_only_fixture_is_invisible_to_the_static_layer(fixtures_dir) -> 
     assert audit(fixtures_dir / "llm_only").findings == []
 
 
-def test_the_llm_only_fixture_yields_every_planted_finding(fixtures_dir) -> None:
+def test_the_llm_only_fixture_yields_every_planted_check(fixtures_dir) -> None:
+    """Every planted check fires, though not always on the line the fixture names.
+
+    The recorded cassette also contains findings nobody planted. That is not a
+    defect in the fixture or the tool: several of them are real, and one - the
+    frame-wide `ffill` across ticker boundaries - is a genuine bug the fixture
+    author did not intend. The eval reports them as UNEXPECTED rather than
+    quietly folding them into recall.
+    """
     result = audit(fixtures_dir / "llm_only", provider=_cassette(fixtures_dir), llm_workers=1)
-    assert {f.check_id for f in result.findings} == {
-        "LA006",
-        "LL004",
-        "SV004",
-        "CV005",
-        "CF005",
-        "SO005",
-    }
+    reported = {f.check_id for f in result.findings}
+
+    assert {"LA006", "LL004", "SV004", "CV005", "CF005", "SO005"} <= reported
     assert all(f.source.value == "llm" for f in result.findings)
     assert all(f.confidence.value in {"medium", "low"} for f in result.findings), (
         "an uncorroborated model finding must not claim high confidence"
     )
+
+
+def test_two_model_findings_in_one_category_are_not_collapsed(fixtures_dir) -> None:
+    """Regression: the merge layer used to absorb the second of two model findings
+    that shared a category and sat within the overlap tolerance, silently losing
+    it. That dropped a planted CF005 because a CF002 landed on the same line."""
+    result = audit(fixtures_dir / "llm_only", provider=_cassette(fixtures_dir), llm_workers=1)
+    cost = sorted(f.check_id for f in result.findings if f.category.value == "COST-FANTASY")
+    assert cost == ["CF002", "CF005"]
