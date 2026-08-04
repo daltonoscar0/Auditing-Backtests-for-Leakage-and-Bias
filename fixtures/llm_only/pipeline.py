@@ -14,6 +14,7 @@ from sklearn.model_selection import GroupKFold
 
 COST_BPS = 2.0
 VOL_WINDOW = 60
+FUNDAMENTAL_COLUMNS = ["net_income", "market_cap", "earnings_yield"]
 
 
 def load_fundamentals(path: str) -> pd.DataFrame:
@@ -34,7 +35,9 @@ def attach_fundamentals(panel: pd.DataFrame, fundamentals: pd.DataFrame) -> pd.D
         how="left",
     )
     out["earnings_yield"] = out["net_income"] / out["market_cap"]
-    return out.sort_values(["ticker", "date"]).ffill()
+    out = out.sort_values(["ticker", "date"])
+    out[FUNDAMENTAL_COLUMNS] = out.groupby("ticker")[FUNDAMENTAL_COLUMNS].ffill()
+    return out
 
 
 def attach_sector(panel: pd.DataFrame, reference: pd.DataFrame) -> pd.DataFrame:

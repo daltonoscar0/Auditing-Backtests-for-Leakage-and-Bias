@@ -8,35 +8,35 @@
       "check_id": "LA006",
       "category": "LOOKAHEAD",
       "file": "pipeline.py",
-      "line": 33,
+      "line": 34,
       "note": "The join uses the effective date instead of the availability date."
     },
     {
       "check_id": "LL004",
       "category": "LABEL-LEAK",
       "file": "pipeline.py",
-      "line": 47,
+      "line": 50,
       "note": "Label and feature are drawn from the same bar's open."
     },
     {
       "check_id": "SV004",
       "category": "SURVIVORSHIP",
       "file": "pipeline.py",
-      "line": 42,
+      "line": 45,
       "note": "A one-row-per-ticker reference table applied across all of history."
     },
     {
       "check_id": "CV005",
       "category": "UNPURGED-CV",
       "file": "pipeline.py",
-      "line": 60,
+      "line": 63,
       "note": "Splitting by entity leaves the time axis completely unconstrained."
     },
     {
       "check_id": "CF005",
       "category": "COST-FANTASY",
       "file": "pipeline.py",
-      "line": 67,
+      "line": 70,
       "note": "Order size is never checked against traded volume."
     },
     {
