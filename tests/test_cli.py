@@ -93,3 +93,85 @@ def test_checks_subcommand_lists_the_registry(capsys: pytest.CaptureFixture[str]
     assert main(["checks", "--format", "json"]) == EXIT_OK
     payload = json.loads(capsys.readouterr().out)
     assert len(payload["checks"]) == 23
+
+
+def test_llm_replay_runs_offline_and_reports_usage(
+    fixtures_dir, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(
+        [
+            "audit",
+            str(fixtures_dir / "llm_only"),
+            "--llm-replay",
+            str(fixtures_dir / "llm_only" / "cassette.json"),
+            "--format",
+            "json",
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert code == EXIT_OK
+    assert payload["llm_enabled"] is True
+    assert payload["summary"]["total"] == 6
+    assert {f["check_id"] for f in payload["findings"]} == {
+        "LA006",
+        "LL004",
+        "SV004",
+        "CV005",
+        "CF005",
+        "SO005",
+    }
+    assert payload["llm_usage"]["requests"] == 10
+    assert payload["llm_usage"]["skipped_requests"] == 2
+    assert "model pass:" in captured.err
+
+
+def test_llm_record_writes_a_cassette(fixtures_dir, tmp_path, capsys) -> None:
+    destination = tmp_path / "recorded.json"
+    code = main(
+        [
+            "audit",
+            str(fixtures_dir / "llm_only"),
+            "--llm",
+            "--provider",
+            "mock",
+            "--llm-record",
+            str(destination),
+            "--format",
+            "json",
+        ]
+    )
+    capsys.readouterr()
+
+    assert code == EXIT_OK
+    recorded = json.loads(destination.read_text(encoding="utf-8"))
+    assert recorded["provenance"] == "live"
+    assert len(recorded["responses"]) == 10
+    assert "pipeline.py::LOOKAHEAD" in recorded["responses"]
+
+
+def test_a_missing_cassette_is_an_error(fixtures_dir, tmp_path, capsys) -> None:
+    assert (
+        main(["audit", str(fixtures_dir / "mixed"), "--llm-replay", str(tmp_path / "nope.json")])
+        == EXIT_ERROR
+    )
+    assert capsys.readouterr().err
+
+
+def test_llm_all_categories_disables_the_gate(fixtures_dir, capsys) -> None:
+    main(
+        [
+            "audit",
+            str(fixtures_dir / "llm_only"),
+            "--llm",
+            "--provider",
+            "mock",
+            "--llm-all-categories",
+            "--format",
+            "json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["llm_usage"]["requests"] == 12
+    assert payload["llm_usage"]["skipped_requests"] == 0
