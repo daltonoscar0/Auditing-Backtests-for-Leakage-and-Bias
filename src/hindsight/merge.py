@@ -62,18 +62,29 @@ def merge(
         return sorted(result, key=lambda f: f.sort_key)
 
     for candidate in dedupe(llm):
+        absorbed = False
         for index, existing in enumerate(result):
             if not _same_defect(existing, candidate, tolerance):
                 continue
             if existing.source is Source.STATIC:
+                # Corroboration: the two passes independently found the same thing.
                 result[index] = existing.with_confidence(Confidence.HIGH, Source.BOTH)
-            break
-        else:
-            capped = (
-                candidate
-                if candidate.confidence.rank <= Confidence.MEDIUM.rank
-                else candidate.with_confidence(Confidence.MEDIUM, Source.LLM)
-            )
-            result.append(capped)
+                absorbed = True
+                break
+            # Category-level matching is right for static/model corroboration and
+            # wrong between two model findings: a category is a bucket, not a
+            # defect. A liquidity finding and a fill-price finding on the same
+            # statement are two findings, and collapsing them silently loses
+            # whichever the model happened to report second.
+            if existing.check_id == candidate.check_id:
+                absorbed = True
+                break
+        if absorbed:
+            continue
+        result.append(
+            candidate
+            if candidate.confidence.rank <= Confidence.MEDIUM.rank
+            else candidate.with_confidence(Confidence.MEDIUM, Source.LLM)
+        )
 
     return sorted(result, key=lambda f: f.sort_key)
