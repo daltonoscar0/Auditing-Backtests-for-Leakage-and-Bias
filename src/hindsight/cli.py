@@ -11,13 +11,16 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 from . import checks as _checks  # noqa: F401  - registers checks for --list-checks
 from .audit import audit
+from .baseline import Baseline
 from .checks.base import registered_ids
 from .llm.cassette import LIVE, Cassette, CassetteProvider, RecordingProvider
 from .llm.provider import ProviderError, build_provider
@@ -69,6 +72,20 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="write the report to this file instead of stdout",
+    )
+    audit_parser.add_argument(
+        "--baseline",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="suppress findings recorded in this baseline, reporting only what is new",
+    )
+    audit_parser.add_argument(
+        "--write-baseline",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="write the current findings to a baseline file and report nothing",
     )
     audit_parser.add_argument(
         "--llm",
@@ -131,8 +148,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _list_checks(fmt: str) -> int:
     specs = [spec(check_id) for check_id in registered_ids()]
     if fmt == "json":
-        import json
-
         print(
             json.dumps(
                 {
@@ -191,6 +206,25 @@ def _run_audit(args: argparse.Namespace) -> int:
         print(f"hindsight: {exc}", file=sys.stderr)
         return EXIT_ERROR
 
+    suppressed = 0
+    if args.baseline is not None:
+        try:
+            findings, suppressed = Baseline.load(args.baseline).filter(result.findings)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"hindsight: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+        result = replace(result, findings=findings)
+
+    if args.write_baseline is not None:
+        stamp = datetime.now(tz=UTC).isoformat(timespec="seconds")
+        Baseline.from_findings(result.findings, created_at=stamp).dump(args.write_baseline)
+        print(
+            f"wrote {len(result.findings)} finding(s) to {args.write_baseline}; "
+            f"future runs with --baseline {args.write_baseline} will report only new ones",
+            file=sys.stderr,
+        )
+        return EXIT_OK
+
     if recorder is not None:
         recorder.cassette.recorded_at = datetime.now(tz=UTC).isoformat(timespec="seconds")
         recorder.save(args.llm_record)
@@ -206,6 +240,12 @@ def _run_audit(args: argparse.Namespace) -> int:
         print(f"wrote {args.out}", file=sys.stderr)
     else:
         sys.stdout.write(report)
+
+    if suppressed:
+        print(
+            f"{suppressed} finding(s) suppressed by {args.baseline}",
+            file=sys.stderr,
+        )
 
     if result.llm_usage and result.llm_usage.get("requests"):
         usage = result.llm_usage
