@@ -36,6 +36,7 @@ OUTCOME_COLUMN = re.compile(
 )
 WHOLE_SAMPLE_AGGREGATES = frozenset({"sum", "mean", "max", "min", "last", "count", "prod"})
 TICKER_LITERAL = re.compile(r"^[A-Z][A-Z0-9.\-]{0,5}$")
+REGEX_CALLS = frozenset({"compile", "match", "search", "fullmatch", "findall", "sub"})
 
 
 def _is_mask(node: ast.expr) -> bool:
@@ -77,6 +78,8 @@ class CurrentConstituents(Check):
                 continue
             if token.lower() in reported:
                 continue
+            if self._is_pattern_source(ctx, node):
+                continue
             reported.add(token.lower())
             stmt = ctx.enclosing_statement(node) or node
             seen.add(id(stmt))
@@ -93,6 +96,29 @@ class CurrentConstituents(Check):
             )
 
         yield from self._hardcoded_lists(ctx, seen)
+
+    @staticmethod
+    def _is_pattern_source(ctx: FileContext, node: ast.AST) -> bool:
+        """Whether a matching string is a regex source rather than a name.
+
+        A pattern listing the very names this check looks for is not a universe;
+        it is code that looks for universes. Hindsight's own source tripped this
+        rule on the regex two lines above, which is a fair warning about how any
+        repository holding a vocabulary of bad names would fare.
+        """
+        if any(
+            isinstance(parent, ast.Call) and A.call_tail(parent) in REGEX_CALLS
+            for parent in A.ancestors(node, ctx.parents)
+        ):
+            return True
+        # The bound name matters too: `CURRENT_UNIVERSE = re.compile(...)` matches
+        # on the variable, not only on the pattern inside it.
+        assign = ctx.enclosing_assign(node)
+        return (
+            assign is not None
+            and isinstance(assign.value, ast.Call)
+            and A.call_tail(assign.value) in REGEX_CALLS
+        )
 
     @staticmethod
     def _token(node: ast.AST) -> str | None:
