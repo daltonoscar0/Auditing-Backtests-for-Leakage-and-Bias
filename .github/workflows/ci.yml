@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Test
+        run: pytest -q
+
+      # The eval is the real gate: recall against the planted-bug fixtures and
+      # zero findings on the clean and cross-file ones. It runs entirely offline,
+      # replaying the recorded cassette rather than calling any API.
+      - name: Eval
+        run: python eval/run_eval.py
+
+      - name: Audit itself
+        run: python -m hindsight.cli audit src --fail-on critical
+        env:
+          PYTHONPATH: src

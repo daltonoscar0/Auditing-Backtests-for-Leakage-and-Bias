@@ -170,3 +170,68 @@ def test_llm_all_categories_disables_the_gate(fixtures_dir, capsys) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert payload["llm_usage"]["requests"] == 12
     assert payload["llm_usage"]["skipped_requests"] == 0
+
+
+def test_baseline_round_trip(fixtures_dir, tmp_path, capsys) -> None:
+    destination = tmp_path / "baseline.json"
+
+    assert (
+        main(["audit", str(fixtures_dir / "mixed"), "--write-baseline", str(destination)])
+        == EXIT_OK
+    )
+    assert "9 finding(s)" in capsys.readouterr().err
+
+    code = main(
+        ["audit", str(fixtures_dir / "mixed"), "--baseline", str(destination), "--format", "json"]
+    )
+    captured = capsys.readouterr()
+    assert code == EXIT_OK
+    assert json.loads(captured.out)["summary"]["total"] == 0
+    assert "9 finding(s) suppressed" in captured.err
+
+
+def test_a_baseline_survives_edits_elsewhere_in_the_file(fixtures_dir, tmp_path, capsys) -> None:
+    """Fingerprints key on the cited text, so inserting a line above a finding
+    must not resurrect it."""
+    import shutil
+
+    target = tmp_path / "repo"
+    shutil.copytree(fixtures_dir / "mixed", target)
+    destination = tmp_path / "baseline.json"
+    main(["audit", str(target), "--write-baseline", str(destination)])
+    capsys.readouterr()
+
+    features = target / "features.py"
+    features.write_text("# a new comment at the top\n" + features.read_text(), encoding="utf-8")
+
+    main(["audit", str(target), "--baseline", str(destination), "--format", "json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["summary"]["total"] == 0, (
+        "a line-numbered baseline would have gone stale here; a fingerprinted one does not"
+    )
+
+
+def test_a_new_finding_survives_the_baseline(fixtures_dir, tmp_path, capsys) -> None:
+    import shutil
+
+    target = tmp_path / "repo"
+    shutil.copytree(fixtures_dir / "mixed", target)
+    destination = tmp_path / "baseline.json"
+    main(["audit", str(target), "--write-baseline", str(destination)])
+    capsys.readouterr()
+
+    (target / "extra.py").write_text(
+        'import pandas as pd\n\npanel["peek"] = panel["close"].shift(-1)\n', encoding="utf-8"
+    )
+
+    main(["audit", str(target), "--baseline", str(destination), "--format", "json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["summary"]["total"] == 1
+    assert payload["findings"][0]["file"] == "extra.py"
+
+
+def test_an_unreadable_baseline_is_an_error(fixtures_dir, tmp_path, capsys) -> None:
+    broken = tmp_path / "broken.json"
+    broken.write_text("{not json", encoding="utf-8")
+    assert main(["audit", str(fixtures_dir / "mixed"), "--baseline", str(broken)]) == EXIT_ERROR
+    assert capsys.readouterr().err
