@@ -1,0 +1,15 @@
+{
+  "taxonomy_version": "1.0.0",
+  "fixture": "label_leak",
+  "description": "A three-day return forecaster in which the target reaches the feature matrix by four separate routes.",
+  "expected": [
+    {"check_id": "LL001", "category": "LABEL-LEAK", "file": "train.py", "line": 12,
+     "note": "The FEATURES allow-list contains fwd_ret_3d_ma, a moving average of the target."},
+    {"check_id": "LL002", "category": "LABEL-LEAK", "file": "train.py", "line": 28,
+     "note": "signal_strength is a rolling mean of the target under a name that hides it."},
+    {"check_id": "LL001", "category": "LABEL-LEAK", "file": "train.py", "line": 34,
+     "note": "Subtractive construction: the drop removes date/ticker/close and leaves the target in X."},
+    {"check_id": "LL003", "category": "LABEL-LEAK", "file": "train.py", "line": 42,
+     "note": "The scaler is fitted on the whole panel, target column included."}
+  ]
+}

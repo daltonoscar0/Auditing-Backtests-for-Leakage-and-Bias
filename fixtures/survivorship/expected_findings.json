@@ -1,0 +1,15 @@
+{
+  "taxonomy_version": "1.0.0",
+  "fixture": "survivorship",
+  "description": "Universe construction for a cross-sectional value model, selected four different ways on information from the end of the sample.",
+  "expected": [
+    {"check_id": "SV001", "category": "SURVIVORSHIP", "file": "universe.py", "line": 11,
+     "note": "A hard-coded ticker list applied to a time-indexed panel contains only names that still exist."},
+    {"check_id": "SV001", "category": "SURVIVORSHIP", "file": "universe.py", "line": 16,
+     "note": "current_constituents reads today's membership file and applies it across history."},
+    {"check_id": "SV002", "category": "SURVIVORSHIP", "file": "universe.py", "line": 29,
+     "note": "Filtering on is_active drops exactly the names whose outcomes were worst."},
+    {"check_id": "SV003", "category": "SURVIVORSHIP", "file": "universe.py", "line": 34,
+     "note": "The liquidity screen sums dollar volume over each name's entire history."}
+  ]
+}

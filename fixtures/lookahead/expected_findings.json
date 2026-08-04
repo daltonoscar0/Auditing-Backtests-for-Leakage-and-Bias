@@ -1,0 +1,49 @@
+{
+  "taxonomy_version": "1.0.0",
+  "fixture": "lookahead",
+  "description": "A daily cross-sectional momentum pipeline with five planted lookaheads. Each one is a value that could not have been computed at the bar it is attached to.",
+  "expected": [
+    {
+      "check_id": "LA001",
+      "category": "LOOKAHEAD",
+      "file": "features.py",
+      "line": 22,
+      "note": "reversal_1d is the next session's return, attached to today's row."
+    },
+    {
+      "check_id": "LA001",
+      "category": "LOOKAHEAD",
+      "file": "features.py",
+      "line": 23,
+      "note": "gap_next reads tomorrow's open against today's close."
+    },
+    {
+      "check_id": "LA002",
+      "category": "LOOKAHEAD",
+      "file": "features.py",
+      "line": 31,
+      "note": "A 21-bar centred rolling mean draws ten bars from after t."
+    },
+    {
+      "check_id": "LA003",
+      "category": "LOOKAHEAD",
+      "file": "features.py",
+      "line": 39,
+      "note": "Backward-filling book_to_price carries a later filing into rows that predate it."
+    },
+    {
+      "check_id": "LA005",
+      "category": "LOOKAHEAD",
+      "file": "features.py",
+      "line": 47,
+      "note": "The z-score divides by the whole column's mean and standard deviation."
+    },
+    {
+      "check_id": "LA004",
+      "category": "LOOKAHEAD",
+      "file": "pipeline.py",
+      "line": 33,
+      "note": "StandardScaler is fitted on the full panel before the walk-forward split."
+    }
+  ]
+}
