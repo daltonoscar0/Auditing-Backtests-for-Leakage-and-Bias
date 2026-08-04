@@ -10,7 +10,9 @@ time.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from ..context import FileContext
@@ -19,6 +21,59 @@ from ..taxonomy import SPECS
 from .prompts import SYSTEM, build_user_prompt
 from .provider import Provider, ProviderError
 from .schema import FINDINGS_SCHEMA
+
+DEFAULT_WORKERS = 4
+
+# A category is worth asking about only if the file contains something it could
+# possibly apply to. Six requests per file is the naive cost; in practice most
+# files are relevant to one or two categories, and skipping the rest is the
+# difference between a CI step and something nobody runs.
+#
+# Every pattern here is deliberately loose. A skipped category is a guaranteed
+# miss, so the bar for skipping is "there is nothing in this file the category
+# could even attach to", not "this file looks fine".
+RELEVANCE: dict[Category, re.Pattern[str]] = {
+    Category.LOOKAHEAD: re.compile(
+        r"shift|rolling|expanding|ewm|resample|merge|join|fillna|ffill|bfill|asof|"
+        r"pct_change|diff|lag|lead|align|reindex|feature|signal|factor",
+        re.IGNORECASE,
+    ),
+    Category.LABEL_LEAK: re.compile(
+        r"fit|train|target|label|^y$|predict|feature|X_train|design|model", re.IGNORECASE
+    ),
+    Category.SURVIVORSHIP: re.compile(
+        r"universe|constituent|ticker|symbol|member|listing|delist|panel|screen|"
+        r"index|read_csv|read_parquet|load|merge|join|isin",
+        re.IGNORECASE,
+    ),
+    Category.UNPURGED_CV: re.compile(
+        r"split|fold|cv|cross_val|validate|validation|train|test|holdout|oos|"
+        r"purge|embargo|backtest|walk_forward|fit",
+        re.IGNORECASE,
+    ),
+    Category.COST_FANTASY: re.compile(
+        r"position|weight|trade|order|fill|execut|pnl|profit|return|ret|price|"
+        r"slippage|cost|fee|commission|borrow|turnover|notional|volume|liquidity|size",
+        re.IGNORECASE,
+    ),
+    # Widened after this gate silently skipped the one category that mattered on
+    # fixtures/llm_only/study.py, whose defect is a selection log with no sweep
+    # vocabulary in it at all. Iterative refinement against a fixed holdout is
+    # the hardest SWEEP-OVERFIT case to spot precisely because it does not look
+    # like a search.
+    Category.SWEEP_OVERFIT: re.compile(
+        r"grid|param|search|sweep|tune|tuning|best|optim|score|sharpe|trial|"
+        r"candidate|threshold|product|itertools|GridSearch|Randomized|"
+        r"holdout|oos|round|select|evaluat|experiment|iterat|variant|attempt|"
+        r"compare|result|version|baseline",
+        re.IGNORECASE,
+    ),
+}
+
+
+def relevant_categories(ctx: FileContext, categories: Sequence[Category]) -> list[Category]:
+    """Categories worth spending a request on for this file."""
+    return [c for c in categories if any(RELEVANCE[c].search(t) for t in ctx.vocabulary)]
 
 
 @dataclass
@@ -31,20 +86,46 @@ class RejectedFinding:
 
 @dataclass
 class LLMPass:
-    """Runs one structured request per (file, category) and validates the results."""
+    """Runs one structured request per relevant (file, category) and validates the results."""
 
     provider: Provider
     categories: Sequence[Category] = tuple(Category)
     max_lines: int = 400
+    workers: int = DEFAULT_WORKERS
+    gate: bool = True
+    """Whether to skip categories with no lexical foothold in the file. Turn off
+    to spend the full six requests per file."""
     rejected: list[RejectedFinding] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    skipped: list[str] = field(default_factory=list)
+
+    def plan(self, contexts: Iterable[FileContext]) -> list[tuple[FileContext, Category]]:
+        """The (file, category) requests this pass will make."""
+        requests: list[tuple[FileContext, Category]] = []
+        for ctx in contexts:
+            wanted = (
+                relevant_categories(ctx, self.categories) if self.gate else list(self.categories)
+            )
+            for category in self.categories:
+                if category in wanted:
+                    requests.append((ctx, category))
+                else:
+                    self.skipped.append(f"{ctx.path} [{category.value}]")
+        return requests
 
     def run(self, contexts: Iterable[FileContext]) -> list[Finding]:
-        findings: list[Finding] = []
-        for ctx in contexts:
-            for category in self.categories:
-                findings.extend(self.run_one(ctx, category))
-        return findings
+        requests = self.plan(contexts)
+        if not requests:
+            return []
+        if self.workers <= 1:
+            return [f for ctx, cat in requests for f in self.run_one(ctx, cat)]
+
+        # Requests are independent and dominated by round-trip latency, so a small
+        # thread pool turns a serial wait into a parallel one. Results are
+        # collected in request order to keep runs reproducible.
+        with ThreadPoolExecutor(max_workers=self.workers) as pool:
+            batches = list(pool.map(lambda item: self.run_one(*item), requests))
+        return [finding for batch in batches for finding in batch]
 
     def run_one(self, ctx: FileContext, category: Category) -> list[Finding]:
         prompt = build_user_prompt(ctx, category, max_lines=self.max_lines)
