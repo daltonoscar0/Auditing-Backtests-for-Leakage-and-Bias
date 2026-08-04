@@ -22,7 +22,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from hindsight import audit  # noqa: E402
-from hindsight.llm.cassette import Cassette, CassetteProvider  # noqa: E402
+from hindsight.llm.cassette import (  # noqa: E402
+    MODEL_GENERATED,
+    Cassette,
+    CassetteProvider,
+)
 from hindsight.models import Category, Finding  # noqa: E402
 from hindsight.taxonomy import TAXONOMY_VERSION  # noqa: E402
 
@@ -72,6 +76,13 @@ class FixtureResult:
     missed: list[Expectation] = field(default_factory=list)
     unexpected: list[Finding] = field(default_factory=list)
     id_mismatches: list[tuple[Expectation, Finding]] = field(default_factory=list)
+    anchor_mismatches: list[tuple[Expectation, Finding]] = field(default_factory=list)
+    """Expectations with no match inside the line tolerance, but where the same
+    check did fire elsewhere in the same file. A defect that spans several
+    statements has more than one defensible citation, and 'found it, anchored it
+    somewhere else' is a different result from 'did not find it'. These still
+    count as misses in the recall figure - the anchor is part of what makes a
+    finding actionable - but the distinction is reported rather than hidden."""
 
     @property
     def recall(self) -> float:
@@ -123,6 +134,16 @@ def score_fixture(name: str, tolerance: int) -> FixtureResult:
         hit = next((f for f in remaining if expectation.matches(f, tolerance)), None)
         if hit is None:
             outcome.missed.append(expectation)
+            elsewhere = next(
+                (
+                    f
+                    for f in remaining
+                    if f.location.path == expectation.file and f.check_id == expectation.check_id
+                ),
+                None,
+            )
+            if elsewhere is not None:
+                outcome.anchor_mismatches.append((expectation, elsewhere))
             continue
         remaining.remove(hit)
         outcome.matched.append((expectation, hit))
@@ -194,14 +215,20 @@ def print_scoreboard(results: list[FixtureResult], tolerance: int) -> None:
                 f"  {result.name:<16} {len(result.matched):>7} {len(result.expectations):>8} "
                 f"{recall:>8}  {result.provenance:<14}"
             )
-        if any(r.provenance != "live" for r in llm):
-            print()
+        print()
+        if all(r.provenance == "live" for r in llm):
+            pass
+        elif all(r.provenance in MODEL_GENERATED for r in llm):
             print(
-                "  NOTE: no live recording. These rows prove the Layer 2 pipeline works\n"
+                "  NOTE: responses are model-generated but were not recorded through\n"
+                "  AnthropicProvider, so the API wire format remains verified only by\n"
+                "  the fake-client tests. Re-record through the API with: make record"
+            )
+        else:
+            print(
+                "  NOTE: no model recording. These rows prove the Layer 2 pipeline works\n"
                 "  end to end and that the fixture is statically clean. They say nothing\n"
-                "  about whether the model finds these defects. Re-record with:\n"
-                "    hindsight audit fixtures/llm_only --llm \\\n"
-                "        --llm-record fixtures/llm_only/cassette.json"
+                "  about whether the model finds these defects. Re-record with: make record"
             )
         print()
 
@@ -211,10 +238,19 @@ def print_detail(results: list[FixtureResult]) -> None:
         if not (result.missed or result.unexpected or result.id_mismatches):
             continue
         print(f"{result.name}:")
+        anchored = {id(e) for e, _ in result.anchor_mismatches}
         for expectation in result.missed:
+            if id(expectation) in anchored:
+                continue
             print(
                 f"  MISSED     {expectation.category:<14} {expectation.file}:{expectation.line}"
                 f"  ({expectation.check_id}) {expectation.note}"
+            )
+        for expectation, finding in result.anchor_mismatches:
+            print(
+                f"  ANCHOR     {expectation.category:<14} {expectation.file}:"
+                f"{expectation.line} expected, {finding.check_id} reported at "
+                f"{finding.location} instead"
             )
         for finding in result.unexpected:
             label = "FALSE POS " if result.name == CLEAN_FIXTURE else "UNEXPECTED"
@@ -251,6 +287,8 @@ def main(argv: list[str] | None = None) -> int:
     llm_matched = sum(len(r.matched) for r in llm)
     llm_recall = llm_matched / llm_expected if llm_expected else 1.0
     llm_live = bool(llm) and all(r.provenance == "live" for r in llm)
+    llm_model_generated = bool(llm) and all(r.provenance in MODEL_GENERATED for r in llm)
+    llm_anchor = sum(len(r.anchor_mismatches) for r in llm)
 
     clean = next((r for r in results if r.name == CLEAN_FIXTURE), None)
     false_positives = len(clean.unexpected) if clean else 0
@@ -265,6 +303,8 @@ def main(argv: list[str] | None = None) -> int:
                     "false_positives_on_clean": false_positives,
                     "llm_pipeline_recall": llm_recall,
                     "llm_recording_is_live": llm_live,
+                    "llm_recording_is_model_generated": llm_model_generated,
+                    "llm_anchor_mismatches": llm_anchor,
                     "by_category": {
                         k: {"found": v[0], "expected": v[1]}
                         for k, v in category_recall(static).items()
@@ -291,8 +331,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"False positives on clean/  {false_positives}")
         if llm:
             print(
-                f"Layer 2 pipeline       {llm_recall:.1%}  ({llm_matched}/{llm_expected})"
-                f"  [{'live' if llm_live else 'replay only, not model-verified'}]"
+                f"Layer 2 recall         {llm_recall:.1%}  ({llm_matched}/{llm_expected})"
+                + (f", {llm_anchor} anchored elsewhere" if llm_anchor else "")
+                + f"  [{llm[0].provenance}]"
             )
         print()
 
@@ -301,7 +342,10 @@ def main(argv: list[str] | None = None) -> int:
         failures.append(f"recall {overall:.1%} is below the {args.target:.0%} target")
     if false_positives:
         failures.append(f"{false_positives} finding(s) on the clean fixture")
-    if llm_expected and llm_recall < 1.0:
+    # A Layer 2 shortfall against a model-generated cassette is a measurement, not
+    # a regression, so it is reported rather than failing the build. Against a
+    # hand-authored one it means the pipeline dropped a recorded finding, which is.
+    if llm_expected and llm_recall < 1.0 and not llm_model_generated:
         failures.append(
             f"the Layer 2 pipeline dropped {llm_expected - llm_matched} recorded finding(s)"
         )
