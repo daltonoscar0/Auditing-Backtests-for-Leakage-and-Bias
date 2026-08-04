@@ -1,0 +1,6 @@
+{
+  "taxonomy_version": "1.0.0",
+  "fixture": "clean",
+  "description": "A carefully written research repo: point-in-time universe including delistings, expanding-window normalisation, purged and embargoed walk-forward validation, commission plus half-spread plus borrow costs, and a deflated Sharpe. It must produce zero findings. Every false positive the tool ever develops should show up here first.",
+  "expected": []
+}
