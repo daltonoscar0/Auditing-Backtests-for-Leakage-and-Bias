@@ -131,7 +131,15 @@ def score_fixture(name: str, tolerance: int) -> FixtureResult:
     )
 
     for expectation in expectations:
-        hit = next((f for f in remaining if expectation.matches(f, tolerance)), None)
+        # Category is the scoring key, but when several findings of one category
+        # land on one statement, category alone will happily consume the wrong
+        # one and leave the right one looking unexpected. Prefer an exact check
+        # before falling back.
+        candidates = [f for f in remaining if expectation.matches(f, tolerance)]
+        hit = next(
+            (f for f in candidates if f.check_id == expectation.check_id),
+            candidates[0] if candidates else None,
+        )
         if hit is None:
             outcome.missed.append(expectation)
             elsewhere = next(
