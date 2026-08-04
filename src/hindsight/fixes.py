@@ -20,7 +20,10 @@ from .context import FileContext
 
 def unified(ctx: FileContext, replacements: dict[int, str], *, context_lines: int = 2) -> str:
     """Render a unified diff replacing the given 1-based lines with new text."""
-    if not replacements:
+    if not replacements or ctx.is_notebook:
+        # A notebook's lines on disk are JSON string fragments, so a diff against
+        # the flattened source would not apply to anything. The prose remedy on
+        # the finding still stands.
         return ""
     old = list(ctx.lines)
     new = list(ctx.lines)

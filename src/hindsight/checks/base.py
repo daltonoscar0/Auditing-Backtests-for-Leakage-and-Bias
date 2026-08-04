@@ -50,6 +50,8 @@ class Check:
         means in general.
         """
         start, end = A.span(node)
+        snippet = ctx.snippet(node)
+        line, last, cell = ctx.location_for(start, end_line if end_line is not None else end)
         mechanism = self.spec.mechanism
         if detail:
             mechanism = f"{mechanism}\n\nHere: {detail}"
@@ -59,8 +61,8 @@ class Check:
             title=self.spec.name,
             severity=severity or self.spec.severity,
             confidence=confidence,
-            location=Location(ctx.path, start, end_line if end_line is not None else end),
-            snippet=ctx.snippet(node),
+            location=Location(ctx.path, line, last, cell),
+            snippet=snippet,
             mechanism=mechanism,
             fix=fix,
             source=Source.STATIC,

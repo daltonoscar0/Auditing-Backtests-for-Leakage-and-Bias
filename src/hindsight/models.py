@@ -67,6 +67,10 @@ class Location:
     path: str
     line: int
     end_line: int | None = None
+    cell: int | None = None
+    """1-based notebook cell, when the citation is into a ``.ipynb``. `line` is
+    then the line within that cell, which is the only number a reader looking at
+    the notebook can act on."""
 
     def __post_init__(self) -> None:
         if self.line < 1:
@@ -85,7 +89,10 @@ class Location:
 
     def __str__(self) -> str:
         start, end = self.span
-        return f"{self.path}:{start}" if start == end else f"{self.path}:{start}-{end}"
+        where = f"{start}" if start == end else f"{start}-{end}"
+        if self.cell is not None:
+            return f"{self.path}:cell {self.cell}:{where}"
+        return f"{self.path}:{where}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +125,7 @@ class Finding:
             "severity": self.severity.value,
             "confidence": self.confidence.value,
             "file": self.location.path,
+            "cell": self.location.cell,
             "line": start,
             "end_line": end,
             "snippet": self.snippet,

@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from .context import FileContext, parse
+from .notebook import flatten
 from .readonly import read_text, too_large
 
 SKIP_DIRECTORIES = frozenset(
@@ -45,9 +46,16 @@ def is_skipped(path: Path, root: Path) -> bool:
     return any(part.endswith(".egg-info") for part in parts)
 
 
+AUDITED_SUFFIXES = (".py", ".ipynb")
+
+
 def discover(root: Path) -> Iterator[Path]:
-    """Yield every Python file worth auditing under `root`, in stable order."""
-    for path in sorted(root.rglob("*.py")):
+    """Yield every source file worth auditing under `root`, in stable order."""
+    candidates = sorted(
+        (p for suffix in AUDITED_SUFFIXES for p in root.rglob(f"*{suffix}")),
+        key=lambda p: p.as_posix(),
+    )
+    for path in candidates:
         if not path.is_file() or path.is_symlink():
             continue
         if path.suffix in SKIP_SUFFIXES or is_skipped(path, root):
@@ -73,9 +81,18 @@ def collect(root: Path) -> tuple[list[FileContext], list[str]]:
         except OSError as exc:
             errors.append(f"{rel}: could not read ({exc})")
             continue
+        origins = None
+        if path.suffix == ".ipynb":
+            flattened = flatten(source)
+            if flattened is None:
+                errors.append(f"{rel}: skipped, not a readable notebook")
+                continue
+            source, origins = flattened
+
         context = parse(path, source, rel)
         if context is None:
             errors.append(f"{rel}: skipped, does not parse as Python")
             continue
+        context.origins = origins
         contexts.append(context)
     return contexts, errors
