@@ -38,3 +38,7 @@ demo:  ## Print a markdown report for the mixed fixture
 clean:  ## Remove build artefacts and caches
 	rm -rf build .pytest_cache .ruff_cache
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +
+
+record:  ## Re-record the model-pass cassette against the live API (needs credentials)
+	PYTHONPATH=src $(PYTHON) -m hindsight.cli audit fixtures/llm_only --llm \
+		--llm-record fixtures/llm_only/cassette.json

@@ -57,7 +57,7 @@ Requires Python 3.11 or newer.
 ```sh
 git clone <this repo> && cd hindsight
 make install          # creates .venv and installs with dev extras
-make test             # 155 tests
+make test             # 178 tests
 make eval             # score against the planted-bug fixtures
 ```
 
@@ -87,6 +87,10 @@ hindsight checks [--format text|json]
 | `--only <ids>` | Comma-separated check ids, e.g. `--only LA001,CV003` |
 | `--out <file>` | Write the report to a file instead of stdout |
 | `--llm` | Enable the model reasoning pass (off by default; needs network) |
+| `--llm-record FILE` | Record every model response to a cassette for offline replay |
+| `--llm-replay FILE` | Replay a recorded cassette instead of calling the API |
+| `--llm-workers N` | Parallel model requests (default 4) |
+| `--llm-all-categories` | Ask every category about every file instead of skipping irrelevant ones |
 
 Exit codes: `0` audit ran and nothing tripped `--fail-on`; `1` findings at or
 above the threshold; `2` the audit could not run (bad path, unknown check id,
@@ -154,7 +158,7 @@ research is correct.
       ├──► Layer 1: 23 AST checks           ── always on, stdlib only, offline
       │
       └──► Layer 2: model reasoning pass    ── opt-in via --llm
-               one structured request per (file, category);
+               one structured request per RELEVANT (file, category);
                findings must cite a line and quote it verbatim,
                and are discarded if the quote does not match
       │
@@ -180,7 +184,7 @@ pass/fail and any finding there is a false positive.
 ```
 Hindsight eval — taxonomy 1.0.0, line tolerance +/-3
 
-Per fixture
+Layer 1 — static checks
   fixture            found  planted   recall  extra
   ---------------- ------- -------- --------  -----
   clean                  0        0      n/a      0
@@ -192,7 +196,7 @@ Per fixture
   sweep_overfit          5        5   100.0%      0
   unpurged_cv            4        4   100.0%      0
 
-Per category (planted bugs across all fixtures)
+Per category (planted bugs across the static fixtures)
   category         recall       hits
   -------------- --------  ---------
   LOOKAHEAD       100.0%        8/8  ################
@@ -202,8 +206,20 @@ Per category (planted bugs across all fixtures)
   COST-FANTASY    100.0%        7/7  ################
   SWEEP-OVERFIT   100.0%        7/7  ################
 
+Layer 2 — model pass (replayed from cassette)
+  fixture            found  planted   recall  provenance    
+  ---------------- ------- -------- --------  --------------
+  llm_only               6        6   100.0%  hand-authored 
+
+  NOTE: no live recording. These rows prove the Layer 2 pipeline works
+  end to end and that the fixture is statically clean. They say nothing
+  about whether the model finds these defects. Re-record with:
+    hindsight audit fixtures/llm_only --llm \
+        --llm-record fixtures/llm_only/cassette.json
+
 Overall static recall  100.0%  (37/37)
 False positives on clean/  0
+Layer 2 pipeline       100.0%  (6/6)  [replay only, not model-verified]
 
 PASS
 ```
@@ -223,7 +239,7 @@ they fired on it, which is exactly what it is there for.
 ## Testing
 
 ```sh
-make test    # 155 tests
+make test    # 178 tests
 make lint    # ruff check + format --check
 ```
 
@@ -263,20 +279,40 @@ DECISIONS.md       every judgement call and why
 
 ## Status and known gaps
 
-Milestone 1 (static layer, fixtures, eval) is complete. Milestone 2 (model pass)
-is scaffolded end to end with a mocked provider and full validation; the live
-Anthropic wiring is written but has not been exercised against the API.
+Milestone 1 (static layer, fixtures, eval) is complete.
+
+Milestone 2 (model pass) is complete except for one step. The provider, prompts,
+schema, citation validation, merge, cassette record/replay, relevance gate,
+parallelism and cost accounting are all built, tested and scored by `make eval`.
+The request shape is verified against a fake client — model id, structured
+output config, cached system prompt, refusal handling, usage accounting — so
+everything the wire format depends on is pinned by a test.
+
+**What has not happened: a single live API call.** `fixtures/llm_only/cassette.json`
+is hand-authored, and the eval says so in its own output. To close it:
+
+```sh
+export ANTHROPIC_API_KEY=...        # or: ant auth login
+hindsight audit fixtures/llm_only --llm \
+    --llm-record fixtures/llm_only/cassette.json
+make eval                            # provenance flips to `live`
+```
+
+If the model finds all six, the Layer 2 row becomes a real recall number. If it
+misses some, that is the first honest measurement of what Layer 2 is worth, and
+the prompts get another pass.
 
 Known gaps, in rough order of value:
 
-1. **No cross-file analysis.** A cost model defined in one module and applied in
+1. **No live recording.** See above. Everything else in Layer 2 is verified.
+2. **No cross-file analysis.** A cost model defined in one module and applied in
    another is invisible. This is the largest available accuracy gain.
-2. **No notebook support.** `.ipynb` is where a lot of this research lives.
+3. **No notebook support.** `.ipynb` is where a lot of this research lives.
    Skipped rather than half-done, because a citation needs a line number that
    means something to the reader.
-3. **The model pass has not been run against the live API.** The provider,
-   prompts, schema and validation are tested against a mock.
-4. **Name-based heuristics.** `SURVIVORSHIP` in particular leans on identifier
+4. **Never run on a repo I did not write.** The fixtures and the checks were
+   co-designed, so the recall number measures the fixtures as much as the tool.
+5. **Name-based heuristics.** `SURVIVORSHIP` in particular leans on identifier
    names and reports at `medium` confidence to say so.
 
 ## Licence

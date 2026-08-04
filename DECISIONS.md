@@ -278,3 +278,98 @@ Every derived fact on it is a `cached_property`, which needs an instance
 For `enum.StrEnum`, PEP 604 unions in `isinstance`, and current `ast` node
 shapes. The audited repository can be any Python version that `ast.parse`
 accepts.
+
+---
+
+## Model pass, continued (Milestone 2)
+
+### 35. Requests are keyed `<path>::<CATEGORY>`, read back off the prompt
+
+The prompt carries a `CATEGORY:` header alongside `FILE:`, and `prompt_key`
+parses both back out. This is what lets a cassette be keyed by request identity,
+and it means a recorded response can never be replayed against a different file
+or a different category than the one it was recorded for.
+
+### 36. Cassettes, with provenance recorded in the file
+
+The model pass is non-deterministic, costs money and needs network access. None
+of those belong in `pytest` or `make eval`. A cassette is a JSON file of recorded
+responses; `--llm-record` captures one against the live API and `--llm-replay`
+replays it forever afterwards.
+
+The `provenance` field distinguishes `live` from `hand-authored`, and the eval
+prints it, because the two support very different claims. A hand-authored
+cassette proves the pipeline works end to end — prompt keying, schema, citation
+validation, merge, render — and proves the fixture is statically clean. Only a
+live one says anything about whether the model can find the defect. Conflating
+them would be the single most misleading thing this repo could do, so the
+distinction is in the file format, in the scoreboard and in the README.
+
+### 37. A cassette miss is loud
+
+`CassetteProvider` is strict by default: a prompt with no recorded response
+raises rather than returning an empty finding list. A cassette that has drifted
+out of sync with the prompt builder should fail the build, not quietly score
+zero and look like a model that found nothing.
+
+### 38. The relevance gate is a cost lever with a real risk
+
+Six requests per file is the naive cost. Most files can only possibly trip one or
+two categories, so `relevant_categories` skips the rest — about 45% of requests
+on `fixtures/mixed`, 30% on `clean/`.
+
+The risk is not hypothetical. The first version silently skipped SWEEP-OVERFIT on
+`fixtures/llm_only/study.py`, whose entire defect is a selection log that
+contains no sweep vocabulary at all — iterative refinement against a fixed
+holdout is the hardest case in that category precisely because it does not look
+like a search. The patterns were widened, and
+`test_the_gate_never_drops_a_category_a_fixture_expects` now fails the build if
+the gate would skip a category any fixture plants a bug in.
+
+Every pattern is deliberately loose: a skipped category is a guaranteed miss, so
+the bar for skipping is "there is nothing here the category could attach to", not
+"this looks fine". `--llm-all-categories` turns the gate off entirely.
+
+### 39. Requests run in a small thread pool
+
+They are independent and dominated by round-trip latency. Results are collected
+in request order so runs stay reproducible, and the eval pins workers to 1 so a
+cassette miss surfaces as one clear error rather than several interleaved ones.
+
+### 40. The system prompt gets the cache breakpoint
+
+It is byte-identical across every request in a run and it is the longest fixed
+prefix, so it is the one thing worth caching. The per-file cost then reduces to
+roughly the file itself.
+
+### 41. Token usage and an estimated cost are reported
+
+`AuditResult.llm_usage` carries requests, tokens, cached tokens and a dollar
+estimate at the published rate, and both renderers print it. A tool that quietly
+spends money is a tool that gets switched off after the first invoice. The
+estimate is explicitly an estimate; the invoice is authoritative.
+
+### 42. The live provider is tested against a fake client
+
+`tests/test_provider.py` injects a fake client and asserts the request shape:
+`claude-opus-5`, `output_config.format` carrying the JSON schema, the system
+prompt sent as a cached block, no `temperature`/`top_p`/`top_k`/`thinking`
+(all rejected on this model), refusal checked before `content` is read, and usage
+accumulated across calls. That pins everything the wire format depends on without
+needing credentials, which is what makes it runnable in CI.
+
+### 43. `fixtures/llm_only` must be invisible to the static layer
+
+If the AST checks can see its defects, it is not testing Layer 2.
+`test_the_llm_only_fixture_is_invisible_to_the_static_layer` asserts the static
+audit returns nothing. The six planted defects are all semantic: a join on
+`period_end` rather than `filing_date`, a label sharing a bar with its features, a
+date-less reference table applied across history, `GroupKFold` with no time
+constraint, order sizing with no volume check, and a holdout queried five times.
+
+### 44. The eval reports two layers separately
+
+The headline static recall number is computed over static fixtures only, and the
+Layer 2 row is printed separately with its provenance attached. Folding
+hand-authored cassette hits into a single recall figure would inflate a number
+people will quote.
