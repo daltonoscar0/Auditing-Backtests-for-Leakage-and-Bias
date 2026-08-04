@@ -1,0 +1,13 @@
+{
+  "taxonomy_version": "1.0.0",
+  "fixture": "notebook",
+  "description": "A daily momentum notebook. Cells are concatenated so analysis works across them, but every citation is reported in the coordinates a reader can act on: cell number and line within that cell. Cell 2 opens with an IPython magic, which must not stop the notebook parsing.",
+  "expected": [
+    {"check_id": "LA001", "category": "LOOKAHEAD", "file": "research.ipynb", "cell": 4, "line": 2,
+     "note": "reversal is the next session's return attached to today's row."},
+    {"check_id": "LA002", "category": "LOOKAHEAD", "file": "research.ipynb", "cell": 4, "line": 3,
+     "note": "An 11-bar centred rolling mean draws five bars from after t."},
+    {"check_id": "CV002", "category": "UNPURGED-CV", "file": "research.ipynb", "cell": 6, "line": 2,
+     "note": "train_test_split shuffles a time-indexed panel by default."}
+  ]
+}

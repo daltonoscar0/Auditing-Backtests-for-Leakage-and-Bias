@@ -43,6 +43,9 @@ class Expectation:
     category: str
     file: str
     line: int
+    cell: int | None = None
+    """Notebook cell, when the fixture is a ``.ipynb``. `line` is then the line
+    within that cell, and cell 4 line 2 must not match cell 6 line 2."""
     note: str = ""
 
     def matches(self, finding: Finding, tolerance: int) -> bool:
@@ -55,6 +58,8 @@ class Expectation:
         if finding.category.value != self.category:
             return False
         if finding.location.path != self.file:
+            return False
+        if finding.location.cell != self.cell:
             return False
         start, end = finding.location.span
         return start - tolerance <= self.line <= end + tolerance
