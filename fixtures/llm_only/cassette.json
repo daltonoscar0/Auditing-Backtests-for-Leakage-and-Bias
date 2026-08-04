@@ -1,0 +1,116 @@
+{
+  "model": "",
+  "note": "Hand-authored, NOT recorded from the API. This cassette exercises the Layer 2 pipeline end to end - prompt keying, schema, citation validation, merge, render - and pins fixtures/llm_only as statically clean. It says nothing about whether the model can actually find these defects. Re-record with: hindsight audit fixtures/llm_only --llm --llm-record fixtures/llm_only/cassette.json",
+  "provenance": "hand-authored",
+  "recorded_at": "",
+  "responses": {
+    "pipeline.py::COST-FANTASY": {
+      "findings": [
+        {
+          "category": "COST-FANTASY",
+          "check_id": "CF005",
+          "confidence": "high",
+          "end_line": 67,
+          "file": "pipeline.py",
+          "line": 67,
+          "mechanism": "Target weights are converted to share counts purely from notional and price. Nothing compares the resulting size against traded volume, so at any capital base the backtest will happily take a position larger than the day's entire turnover in a name, and it charges the same 2bp whether it trades one share or the whole book.",
+          "quoted_line": "return notional / panel[\"close\"]",
+          "severity": "medium",
+          "title": "Unlimited liquidity assumed"
+        }
+      ]
+    },
+    "pipeline.py::LABEL-LEAK": {
+      "findings": [
+        {
+          "category": "LABEL-LEAK",
+          "check_id": "LL004",
+          "confidence": "medium",
+          "end_line": 47,
+          "file": "pipeline.py",
+          "line": 47,
+          "mechanism": "The label is that session's own open-to-close move, while `overnight_gap` on line 52 is built from the same session's open. The two share a price, so part of the label's own denominator is already inside the feature matrix. There is no gap between the last observation used for the features and the first used for the label.",
+          "quoted_line": "panel[\"intraday_move\"] = panel[\"close\"] / panel[\"open\"] - 1.0",
+          "severity": "high",
+          "title": "No gap between the feature bar and the label horizon"
+        }
+      ]
+    },
+    "pipeline.py::LOOKAHEAD": {
+      "findings": [
+        {
+          "category": "LOOKAHEAD",
+          "check_id": "LA006",
+          "confidence": "high",
+          "end_line": 33,
+          "file": "pipeline.py",
+          "line": 33,
+          "mechanism": "The fundamentals are joined on `period_end`, the last day of the quarter the numbers describe, rather than on `filing_date`, the day the report was released. `load_fundamentals` says that gap is six to nine weeks. A row dated 31 March therefore carries net income that nobody could read until mid-May, and the `ffill` on line 37 then carries that unknowable value forward across every session in between.",
+          "quoted_line": "right_on=[\"ticker\", \"period_end\"],",
+          "severity": "critical",
+          "title": "Feature timestamped after the bar it indexes"
+        }
+      ]
+    },
+    "pipeline.py::SURVIVORSHIP": {
+      "findings": [
+        {
+          "category": "SURVIVORSHIP",
+          "check_id": "SV004",
+          "confidence": "medium",
+          "end_line": 42,
+          "file": "pipeline.py",
+          "line": 42,
+          "mechanism": "`reference` is documented as one row per ticker, so it has no date dimension. Joining it onto a time-indexed panel stamps today's sector, country and listing venue onto every historical row. Companies are reclassified, re-domiciled and move venue, and the round-5 change in study.py excludes sectors using exactly this present-day labelling.",
+          "quoted_line": "return panel.merge(reference, on=\"ticker\", how=\"left\")",
+          "severity": "medium",
+          "title": "Static universe table joined across history"
+        }
+      ]
+    },
+    "pipeline.py::UNPURGED-CV": {
+      "findings": [
+        {
+          "category": "UNPURGED-CV",
+          "check_id": "CV005",
+          "confidence": "high",
+          "end_line": 61,
+          "file": "pipeline.py",
+          "line": 60,
+          "mechanism": "`GroupKFold` on ticker guarantees a name is never split across folds, which the docstring treats as sufficient. It places no constraint on the calendar: the training fold and the test fold cover the same dates for different names. In a market with common factor exposure, that hands the model the realised factor return of the test period through the names that stayed in training.",
+          "quoted_line": "splitter = GroupKFold(n_splits=n_splits)",
+          "severity": "high",
+          "title": "Grouped split that ignores the time axis"
+        }
+      ]
+    },
+    "study.py::LABEL-LEAK": {
+      "findings": []
+    },
+    "study.py::LOOKAHEAD": {
+      "findings": []
+    },
+    "study.py::SURVIVORSHIP": {
+      "findings": []
+    },
+    "study.py::SWEEP-OVERFIT": {
+      "findings": [
+        {
+          "category": "SWEEP-OVERFIT",
+          "check_id": "SO005",
+          "confidence": "high",
+          "end_line": 20,
+          "file": "study.py",
+          "line": 13,
+          "mechanism": "Five successive rounds of model revision were each scored against the same holdout beginning 2023-01-01, and the Sharpe climbs monotonically from 0.31 to 0.94 as the configuration is adjusted in response. No single round is a parameter sweep, but the researcher is the search algorithm and the holdout has been fitted through them. The reported 0.94 carries the selection bias of all five queries.",
+          "quoted_line": "ROUNDS = [",
+          "severity": "high",
+          "title": "Iterative refinement against a single holdout"
+        }
+      ]
+    },
+    "study.py::UNPURGED-CV": {
+      "findings": []
+    }
+  }
+}

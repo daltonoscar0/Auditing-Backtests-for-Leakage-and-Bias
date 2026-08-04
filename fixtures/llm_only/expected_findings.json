@@ -1,0 +1,50 @@
+{
+  "taxonomy_version": "1.0.0",
+  "fixture": "llm_only",
+  "description": "Six defects that leave no mechanical signature: a join on an effective date rather than an availability date, a label sharing a bar with its features, a date-less reference table applied across history, an entity-grouped split with no time constraint, order sizing with no volume check, and a holdout queried five times. The static layer must find nothing here; every expectation is an LM-only check.",
+  "layer": "llm",
+  "expected": [
+    {
+      "check_id": "LA006",
+      "category": "LOOKAHEAD",
+      "file": "pipeline.py",
+      "line": 33,
+      "note": "The join uses the effective date instead of the availability date."
+    },
+    {
+      "check_id": "LL004",
+      "category": "LABEL-LEAK",
+      "file": "pipeline.py",
+      "line": 47,
+      "note": "Label and feature are drawn from the same bar's open."
+    },
+    {
+      "check_id": "SV004",
+      "category": "SURVIVORSHIP",
+      "file": "pipeline.py",
+      "line": 42,
+      "note": "A one-row-per-ticker reference table applied across all of history."
+    },
+    {
+      "check_id": "CV005",
+      "category": "UNPURGED-CV",
+      "file": "pipeline.py",
+      "line": 60,
+      "note": "Splitting by entity leaves the time axis completely unconstrained."
+    },
+    {
+      "check_id": "CF005",
+      "category": "COST-FANTASY",
+      "file": "pipeline.py",
+      "line": 67,
+      "note": "Order size is never checked against traded volume."
+    },
+    {
+      "check_id": "SO005",
+      "category": "SWEEP-OVERFIT",
+      "file": "study.py",
+      "line": 13,
+      "note": "The same holdout is queried across five rounds of revision."
+    }
+  ]
+}
