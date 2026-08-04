@@ -79,6 +79,25 @@ CATEGORY_FRAMING: dict[Category, str] = {
 }
 
 
+def prompt_key(user: str) -> str:
+    """Stable identity of a request, read back off the prompt itself.
+
+    ``<path>::<CATEGORY>``. Used to key cassettes and the mock provider, so a
+    recorded response can never be replayed against a different file or a
+    different category than the one it was recorded for.
+    """
+    path = ""
+    category = ""
+    for line in user.splitlines():
+        if line.startswith("FILE: "):
+            path = line[len("FILE: ") :].strip()
+        elif line.startswith("CATEGORY: "):
+            category = line[len("CATEGORY: ") :].strip()
+        if path and category:
+            break
+    return f"{path}::{category}" if category else path
+
+
 def checks_block(category: Category) -> str:
     """Render the taxonomy entries the model is allowed to report for a category."""
     lines: list[str] = []
@@ -124,6 +143,7 @@ def build_user_prompt(ctx: FileContext, category: Category, *, max_lines: int = 
 
     return f"""\
 FILE: {ctx.path}
+CATEGORY: {category.value}
 
 Audit this file for {category.value} defects only.
 
