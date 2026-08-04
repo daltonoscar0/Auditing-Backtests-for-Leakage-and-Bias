@@ -1,0 +1,6 @@
+{
+  "taxonomy_version": "1.0.0",
+  "fixture": "cross_file",
+  "description": "A correctly-costed backtest whose cost model lives in a separate module. Read one file at a time, backtest.py looks exactly like research that forgot commission, spread and borrow: CF001, CF002 and CF004 all fire. Resolving its imports is what makes it silent. Like clean/, this fixture must produce zero findings, and it fails the moment cross-file resolution regresses.",
+  "expected": []
+}
