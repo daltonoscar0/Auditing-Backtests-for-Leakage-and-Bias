@@ -57,7 +57,7 @@ Requires Python 3.11 or newer.
 ```sh
 git clone <this repo> && cd hindsight
 make install          # creates .venv and installs with dev extras
-make test             # 178 tests
+make test             # 180 tests
 make eval             # score against the planted-bug fixtures
 ```
 
@@ -209,17 +209,27 @@ Per category (planted bugs across the static fixtures)
 Layer 2 — model pass (replayed from cassette)
   fixture            found  planted   recall  provenance    
   ---------------- ------- -------- --------  --------------
-  llm_only               6        6   100.0%  hand-authored 
+  llm_only               4        6    66.7%  subagent      
 
-  NOTE: no live recording. These rows prove the Layer 2 pipeline works
-  end to end and that the fixture is statically clean. They say nothing
-  about whether the model finds these defects. Re-record with:
-    hindsight audit fixtures/llm_only --llm \
-        --llm-record fixtures/llm_only/cassette.json
+  NOTE: responses are model-generated but were not recorded through
+  AnthropicProvider, so the API wire format remains verified only by
+  the fake-client tests. Re-record through the API with: make record
+
+llm_only:
+  ANCHOR     LABEL-LEAK     pipeline.py:47 expected, LL004 reported at pipeline.py:54 instead
+  ANCHOR     SWEEP-OVERFIT  study.py:13 expected, SO005 reported at study.py:28-32 instead
+  UNEXPECTED LABEL-LEAK     pipeline.py:54  (LL004) Same-bar close return makes the intraday label algebraically recoverable
+  UNEXPECTED SURVIVORSHIP   study.py:19  (SV003) Round 5 universe excludes the two worst-performing sectors, a whole-sample outcome
+  UNEXPECTED LOOKAHEAD      pipeline.py:37  (LA006) Frame-wide ffill leaks one ticker's later fundamentals into another ticker's earlier rows
+  UNEXPECTED LOOKAHEAD      pipeline.py:54  (LA006) close_to_close feature contains the same session's close, which is the label
+  UNEXPECTED LOOKAHEAD      pipeline.py:42  (LA006) Sector reference joined on ticker alone carries today's classification back over all history
+  UNEXPECTED COST-FANTASY   pipeline.py:66-67  (CF005) Order sizing scales with capital and never checks against traded volume
+  UNEXPECTED SWEEP-OVERFIT  study.py:28-32  (SO005) Headline Sharpe is the fifth revision scored on the same holdout used to choose all five
+  CHECK-ID   pipeline.py:67 expected CF005, got CF002
 
 Overall static recall  100.0%  (37/37)
 False positives on clean/  0
-Layer 2 pipeline       100.0%  (6/6)  [replay only, not model-verified]
+Layer 2 recall         66.7%  (4/6), 2 anchored elsewhere  [subagent]
 
 PASS
 ```
@@ -239,7 +249,7 @@ they fired on it, which is exactly what it is there for.
 ## Testing
 
 ```sh
-make test    # 178 tests
+make test    # 180 tests
 make lint    # ruff check + format --check
 ```
 
@@ -279,39 +289,52 @@ DECISIONS.md       every judgement call and why
 
 ## Status and known gaps
 
-Milestone 1 (static layer, fixtures, eval) is complete.
+Milestone 1 (static layer, fixtures, eval) is complete. Milestone 2 (model pass)
+is complete apart from a live API recording.
 
-Milestone 2 (model pass) is complete except for one step. The provider, prompts,
-schema, citation validation, merge, cassette record/replay, relevance gate,
-parallelism and cost accounting are all built, tested and scored by `make eval`.
-The request shape is verified against a fake client — model id, structured
-output config, cached system prompt, refusal handling, usage accounting — so
-everything the wire format depends on is pinned by a test.
+**The model pass has been measured.** `fixtures/llm_only/cassette.json` holds
+responses from Claude Opus 5, given Hindsight's exact prompts one per
+(file, category), each with a clean context and no access to the fixture's
+answer key. The result:
 
-**What has not happened: a single live API call.** `fixtures/llm_only/cassette.json`
-is hand-authored, and the eval says so in its own output. To close it:
+- **All six planted defects were identified.** Four were cited within the eval's
+  ±3-line tolerance; two were anchored on a different but defensible line — the
+  label-leak was cited on the leaking *feature* rather than the label, and the
+  holdout-reuse on the docstring claiming the headline rather than the round
+  table. The eval reports these as `ANCHOR`, and they still count as misses,
+  because where a finding points is part of what makes it actionable.
+- **Seven findings nobody planted**, most of them real: a rolling window whose
+  right edge includes the label bar, an exact algebraic reconstruction of the
+  target from two features, and a frame-wide `ffill` that leaks one ticker's
+  fundamentals into another's history — that last one a genuine bug in the
+  fixture its author did not intend.
+- **One bug in Hindsight**, found by the exercise: the merge layer was collapsing
+  two model findings that shared a category and sat close together, silently
+  dropping a planted `CF005` because a `CF002` landed on the same statement.
+
+The recording is marked `subagent`, not `live`: it evidences that the model finds
+these defects, not that `AnthropicProvider` speaks the wire format. That last
+step needs an API key (~$0.17):
 
 ```sh
-export ANTHROPIC_API_KEY=...        # or: ant auth login
-hindsight audit fixtures/llm_only --llm \
-    --llm-record fixtures/llm_only/cassette.json
+export ANTHROPIC_API_KEY=...        # Console account; separate from a Claude subscription
+make record                          # re-records through AnthropicProvider
 make eval                            # provenance flips to `live`
 ```
 
-If the model finds all six, the Layer 2 row becomes a real recall number. If it
-misses some, that is the first honest measurement of what Layer 2 is worth, and
-the prompts get another pass.
-
 Known gaps, in rough order of value:
 
-1. **No live recording.** See above. Everything else in Layer 2 is verified.
-2. **No cross-file analysis.** A cost model defined in one module and applied in
+1. **No cross-file analysis.** A cost model defined in one module and applied in
    another is invisible. This is the largest available accuracy gain.
-3. **No notebook support.** `.ipynb` is where a lot of this research lives.
+2. **Never run on a repo I did not write.** The static fixtures and the static
+   checks were co-designed, so that 100% is partly a measure of the fixtures.
+   The Layer 2 number is more meaningful — the model had no answer key — but the
+   fixture author and the tool author are still the same person.
+3. **No live API recording.** Everything else in Layer 2 is verified; the wire
+   format is pinned by fake-client tests.
+4. **No notebook support.** `.ipynb` is where a lot of this research lives.
    Skipped rather than half-done, because a citation needs a line number that
    means something to the reader.
-4. **Never run on a repo I did not write.** The fixtures and the checks were
-   co-designed, so the recall number measures the fixtures as much as the tool.
 5. **Name-based heuristics.** `SURVIVORSHIP` in particular leans on identifier
    names and reports at `medium` confidence to say so.
 

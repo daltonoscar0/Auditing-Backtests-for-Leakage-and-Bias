@@ -373,3 +373,58 @@ The headline static recall number is computed over static fixtures only, and the
 Layer 2 row is printed separately with its provenance attached. Folding
 hand-authored cassette hits into a single recall figure would inflate a number
 people will quote.
+
+### 45. The model pass was recorded by subagents, not by the API
+
+No API key was available, so the cassette was recorded by giving Claude Opus 5
+subagents Hindsight's exact system and user prompts — one per (file, category),
+each with a clean context and an explicit instruction not to read anything else
+in the repository, since the fixture directory contains the answer key.
+
+This is marked `subagent` rather than `live` because it settles only one of the
+two questions. It shows the model finds these defects; it says nothing about
+whether `AnthropicProvider` speaks the wire format correctly, which remains
+pinned by fake-client tests alone. Conflating the two would have been the easy
+and dishonest move.
+
+### 46. The eval distinguishes a wrong anchor from a miss
+
+The model found all six planted defects but cited two of them on a different
+line from the one the fixture names — the label leak on the leaking feature
+rather than on the label, and the holdout reuse on the docstring claiming the
+headline rather than on the table of rounds. Both are defensible citations of the
+same defect.
+
+They still count as misses, because where a finding points is part of what makes
+it actionable, and moving the expectation to match the model after seeing the
+result would be scoring the exam after reading the answers. But the eval now
+reports them as `ANCHOR` rather than `MISSED`, because "found it, cited it
+elsewhere" and "did not find it" are different results and folding them together
+loses information.
+
+`test_static_recall_holds_at_zero_tolerance` is scoped to the static layer for
+the same reason: holding a model to a line a fixture author chose measures
+agreement about citation style, not detection.
+
+### 47. Unplanted findings are reported, not absorbed
+
+The recorded run produced seven findings nobody planted. Several are real — a
+rolling window whose right edge includes the label bar, an exact algebraic
+reconstruction of the target from two features, and a frame-wide `ffill` that
+leaks one ticker's fundamentals into another's early history, which is a genuine
+bug in the fixture that its author did not intend.
+
+They are left as `UNEXPECTED` in the eval output and the fixture's
+`expected_findings.json` is unchanged. Adding them to the answer key after the
+fact would make the fixture's expectations derived from the model's output,
+which destroys the only thing an independent answer key is for. The `ffill` bug
+is also left in place: fixing it would invalidate a recorded finding and drift
+the cassette.
+
+### 48. A Layer 2 shortfall reports rather than fails
+
+Against a hand-authored cassette, a missing finding means the pipeline dropped
+something and the build should break. Against a model-generated one it is a
+measurement of the model, and a build that fails when a model changes its mind
+is a build nobody can keep green. The eval gates on the static layer and the
+clean fixture, and reports Layer 2.
