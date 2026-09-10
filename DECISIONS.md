@@ -28,7 +28,7 @@ trade for a tool whose output a human has to act on.
 
 ### 2. The taxonomy is versioned and the tool states its limits
 
-`TAXONOMY.md` ends with an explicit list of what Hindsight does *not* check —
+`TAXONOMY.md` ends with an explicit list of what Hindsight does *not* check -
 data errors, regime dependence, capacity, execution microstructure, statistical
 inference beyond multiple testing. A clean report says "none of these 29 patterns
 were found", not "this research is correct", and the report renderer says so in
@@ -54,7 +54,7 @@ credentials and egress is an auditor that does not run in CI. `--llm` opts in;
 
 ### 5. Per-file context, computed once
 
-Most checks need the same handful of facts — is this time-ordered data, which
+Most checks need the same handful of facts, is this time-ordered data, which
 column is the target, how far forward does the label look, is there a cost term
 in scope. `FileContext` derives each once and memoises it, so every check agrees
 on the answer. The alternative, each check re-deriving what it needs, produces
@@ -72,7 +72,7 @@ the single largest available accuracy gain and is deferred to Milestone 3.
 
 `shift(-HORIZON)` and `TimeSeriesSplit(gap=HORIZON)` are how people actually
 write this code. `FileContext.resolve_int` follows one level of module-constant
-indirection. Without it, `CV003` would fire on a correctly-gapped splitter — a
+indirection. Without it, `CV003` would fire on a correctly-gapped splitter, a
 false positive on exactly the code that got it right.
 
 ### 8. Windowed views bound to a name are tracked
@@ -168,7 +168,7 @@ have written and the eval cannot be gamed by matching on a marker.
 ### 20. Fixtures are not executed
 
 They are syntactically valid and semantically coherent, and they import pandas,
-numpy and scikit-learn the way real research code does — but the auditor parses
+numpy and scikit-learn the way real research code does, but the auditor parses
 them with `ast` and never imports them. Requiring the eval to *run* them would
 mean requiring pandas and scikit-learn to run the eval, which contradicts the
 zero-heavy-dependency constraint on the core. They are installable for hand
@@ -195,7 +195,7 @@ being fatal. On `clean/` an extra is a false positive and fails the build.
 correctly-gapped `TimeSeriesSplit` that no CV check fires on. `CF003` needs a
 zero cost constant, whose presence would suppress `CF001` in the same scope, so
 the `cost_fantasy` fixture puts it in a separate `config.py` that `backtest.py`
-never imports — which is also the most realistic version of that mistake.
+never imports, which is also the most realistic version of that mistake.
 
 ---
 
@@ -217,8 +217,8 @@ are dropped before a reader ever sees them, with the reason recorded in
 ### 26. Uncorroborated model findings are capped at medium confidence
 
 A static hit confirmed by the model pass is promoted to `high` and marked
-`static+llm`. A model finding with no static counterpart is kept — it is the
-whole point of Layer 2 — but capped at `medium`, because one pass asserting
+`static+llm`. A model finding with no static counterpart is kept, it is the
+whole point of Layer 2, but capped at `medium`, because one pass asserting
 something is weaker evidence than two and the report should say so.
 
 ### 27. `MockProvider` returns nothing by default
@@ -299,8 +299,8 @@ replays it forever afterwards.
 
 The `provenance` field distinguishes `live` from `hand-authored`, and the eval
 prints it, because the two support very different claims. A hand-authored
-cassette proves the pipeline works end to end — prompt keying, schema, citation
-validation, merge, render — and proves the fixture is statically clean. Only a
+cassette proves the pipeline works end to end, prompt keying, schema, citation
+validation, merge, render, and proves the fixture is statically clean. Only a
 live one says anything about whether the model can find the defect. Conflating
 them would be the single most misleading thing this repo could do, so the
 distinction is in the file format, in the scoreboard and in the README.
@@ -315,12 +315,12 @@ zero and look like a model that found nothing.
 ### 38. The relevance gate is a cost lever with a real risk
 
 Six requests per file is the naive cost. Most files can only possibly trip one or
-two categories, so `relevant_categories` skips the rest — about 45% of requests
+two categories, so `relevant_categories` skips the rest, about 45% of requests
 on `fixtures/mixed`, 30% on `clean/`.
 
 The risk is not hypothetical. The first version silently skipped SWEEP-OVERFIT on
 `fixtures/llm_only/study.py`, whose entire defect is a selection log that
-contains no sweep vocabulary at all — iterative refinement against a fixed
+contains no sweep vocabulary at all, iterative refinement against a fixed
 holdout is the hardest case in that category precisely because it does not look
 like a search. The patterns were widened, and
 `test_the_gate_never_drops_a_category_a_fixture_expects` now fails the build if
@@ -377,7 +377,7 @@ people will quote.
 ### 45. The model pass was recorded by subagents, not by the API
 
 No API key was available, so the cassette was recorded by giving Claude Opus 5
-subagents Hindsight's exact system and user prompts — one per (file, category),
+subagents Hindsight's exact system and user prompts, one per (file, category),
 each with a clean context and an explicit instruction not to read anything else
 in the repository, since the fixture directory contains the answer key.
 
@@ -390,7 +390,7 @@ and dishonest move.
 ### 46. The eval distinguishes a wrong anchor from a miss
 
 The model found all six planted defects but cited two of them on a different
-line from the one the fixture names — the label leak on the leaking feature
+line from the one the fixture names, the label leak on the leaking feature
 rather than on the label, and the holdout reuse on the docstring claiming the
 headline rather than on the table of rounds. Both are defensible citations of the
 same defect.
@@ -408,7 +408,7 @@ agreement about citation style, not detection.
 
 ### 47. Unplanted findings are reported, not absorbed
 
-The recorded run produced seven findings nobody planted. Several are real — a
+The recorded run produced seven findings nobody planted. Several are real, a
 rolling window whose right edge includes the label bar, an exact algebraic
 reconstruction of the target from two features, and a frame-wide `ffill` that
 leaks one ticker's fundamentals into another's early history, which is a genuine
@@ -478,12 +478,12 @@ or not `vendor/` is inside the audited tree.
 ### 51. Notebook cells are analysed together and cited separately
 
 Concatenating cells into one synthetic module is what makes cross-cell analysis
-work, and cross-cell is the normal case — a target defined in cell 2 and used in
+work, and cross-cell is the normal case, a target defined in cell 2 and used in
 cell 7. Treating each cell as its own file would miss all of it.
 
 But a line number into that concatenation is not a coordinate anyone can act on,
 so `Location` carries a cell and every citation reads `cell 4, line 2`. Cells
-that are not Python — IPython magics, shell escapes, half-written drafts — are
+that are not Python, IPython magics, shell escapes, half-written drafts, are
 blanked rather than dropped, which keeps every later cell's numbering honest.
 
 No unified diff is offered for a notebook: the lines on disk are JSON string
@@ -504,6 +504,6 @@ present-day universe names contains the string `current_constituents`, and the
 constant holding it is called `CURRENT_UNIVERSE`. Both the pattern and the name
 bound to it are now skipped when the assignment is a compiled regex.
 
-This generalises: any repository that holds a vocabulary of bad names — a linter,
-a data dictionary, a validation schema — would have hit the same thing. The
+This generalises: any repository that holds a vocabulary of bad names, a linter,
+a data dictionary, a validation schema, would have hit the same thing. The
 self-audit step in CI exists to keep catching this class of problem.

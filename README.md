@@ -118,7 +118,7 @@ for finding in result.findings:
 
 ## What it looks for
 
-Six categories, 29 checks — 23 static, 6 reserved for the model pass. The
+Six categories, 29 checks, 23 static, 6 reserved for the model pass. The
 normative specification is [`TAXONOMY.md`](TAXONOMY.md); this is the summary.
 
 | Category | The question it asks | Static checks |
@@ -132,7 +132,7 @@ normative specification is [`TAXONOMY.md`](TAXONOMY.md); this is the summary.
 
 Reference standard for UNPURGED-CV is purged and embargoed walk-forward
 cross-validation as specified in López de Prado, *Advances in Financial Machine
-Learning*, ch. 7 — both requirements are checked: purge the training
+Learning*, ch. 7, both requirements are checked: purge the training
 observations whose label horizon overlaps the test window, and embargo a further
 stretch after it.
 
@@ -178,13 +178,13 @@ research is correct.
 
 Every finding carries: check id and category, severity, a `file:line` citation,
 a plain-English explanation of *why* this biases results, the canonical remedy,
-a confidence level, and — where the fix is mechanical — a unified diff you can
+a confidence level, and, where the fix is mechanical, a unified diff you can
 feed to `git apply`. Hindsight never applies a patch itself.
 
 ## Adopting it on an existing repo
 
 The first run on established research produces a wall of findings, and a wall of
-findings is indistinguishable from none — both get ignored. Record what is
+findings is indistinguishable from none, both get ignored. Record what is
 already there, then report only what is new:
 
 ```sh
@@ -260,13 +260,13 @@ PASS
 
 Target is ≥90% recall and zero findings on `clean/`; the harness exits non-zero
 below either. It is wired into `pytest` (`tests/test_eval.py`), which
-additionally asserts that recall holds at **zero** line tolerance — every check
+additionally asserts that recall holds at **zero** line tolerance, every check
 cites the exact line, not merely the right neighbourhood.
 
 The `clean/` fixture is the most useful thing in the repo. It is a genuinely
-careful piece of research — point-in-time universe including delistings,
+careful piece of research, point-in-time universe including delistings,
 expanding-window normalisation, purged and embargoed walk-forward validation,
-commission plus half-spread plus borrow costs, a deflated Sharpe — and it must
+commission plus half-spread plus borrow costs, a deflated Sharpe, and it must
 produce nothing. Two of the checks were softened during development because
 they fired on it, which is exactly what it is there for.
 
@@ -322,7 +322,7 @@ responses from Claude Opus 5, given Hindsight's exact prompts one per
 answer key. The result:
 
 - **All six planted defects were identified.** Four were cited within the eval's
-  ±3-line tolerance; two were anchored on a different but defensible line — the
+  ±3-line tolerance; two were anchored on a different but defensible line, the
   label-leak was cited on the leaking *feature* rather than the label, and the
   holdout-reuse on the docstring claiming the headline rather than the round
   table. The eval reports these as `ANCHOR`, and they still count as misses,
@@ -330,7 +330,7 @@ answer key. The result:
 - **Findings nobody planted**, most of them real: a rolling window whose right
   edge includes the label bar, an exact algebraic reconstruction of the target
   from two features, and a frame-wide `ffill` that leaked one ticker's
-  fundamentals into another's history — that last one a genuine bug in the
+  fundamentals into another's history, that last one a genuine bug in the
   fixture its author did not intend. It has since been fixed and the affected
   prompts re-recorded; the rest are left as `UNEXPECTED`, because editing the
   answer key to match the model would destroy the only thing an independent
@@ -358,7 +358,7 @@ Known gaps, in rough order of value:
    another is invisible. This is the largest available accuracy gain.
 2. **Never run on a repo I did not write.** The static fixtures and the static
    checks were co-designed, so that 100% is partly a measure of the fixtures.
-   The Layer 2 number is more meaningful — the model had no answer key — but the
+   The Layer 2 number is more meaningful, the model had no answer key, but the
    fixture author and the tool author are still the same person.
 3. **No live API recording.** Everything else in Layer 2 is verified; the wire
    format is pinned by fake-client tests.
