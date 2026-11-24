@@ -40,3 +40,27 @@ jobs:
         run: python -m hindsight.cli audit src --fail-on critical
         env:
           PYTHONPATH: src
+
+  # Verifies the project could be published, without publishing it: builds the
+  # sdist and wheel and runs twine's metadata check. Nothing is uploaded.
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tooling
+        run: pip install build twine
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Check metadata
+        run: twine check --strict dist/*
+
+      - name: Confirm the license landed in the wheel
+        run: |
+          python -m zipfile -l dist/*.whl | grep -i license

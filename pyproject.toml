@@ -9,6 +9,7 @@ description = "Audit trading-research repositories for lookahead, leakage and ba
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
+license-files = ["LICENSE"]
 authors = [{ name = "Oscar Dalton" }]
 keywords = ["backtest", "quant", "lookahead", "leakage", "static-analysis"]
 classifiers = [
@@ -26,6 +27,11 @@ fixtures = ["pandas>=2.0", "numpy>=1.24", "scikit-learn>=1.3"]
 # Live model-backed passes. Static-only mode has no third-party requirement.
 llm = ["anthropic>=0.40"]
 dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.urls]
+Homepage = "https://github.com/daltonoscar0/Auditing-Backtests-for-Leakage-and-Bias"
+Repository = "https://github.com/daltonoscar0/Auditing-Backtests-for-Leakage-and-Bias"
+Issues = "https://github.com/daltonoscar0/Auditing-Backtests-for-Leakage-and-Bias/issues"
 
 [project.scripts]
 hindsight = "hindsight.cli:main"
