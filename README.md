@@ -371,3 +371,7 @@ Known gaps, in rough order of value:
 ## Licence
 
 MIT.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
